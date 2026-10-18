@@ -39,7 +39,10 @@ function request(overrides: Partial<Req> = {}): Req {
 const coconutPatch = {
   kind: "patch",
   summary: "Swapped heavy cream for coconut milk",
-  ops: [{ op: "update_ingredient", id: "i9", item: "coconut milk" }],
+  ops: [
+    { op: "update_ingredient", id: "i9", item: "coconut milk" },
+    { op: "update_step", id: "s7", text: "Stir in the coconut milk and the broiled chicken, then simmer gently for 2 minutes more." },
+  ],
 };
 
 /** How many times `needle` occurs in `haystack`. */
