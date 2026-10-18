@@ -133,33 +133,58 @@ describe("WebSpeechProvider", () => {
   function setup(response: VoiceTurnResponse = { say: "", toolCalls: [{ name: "next_step" }] }) {
     const requestTurn = vi.fn<(body: VoiceTurnRequest, signal: AbortSignal) => Promise<VoiceTurnResponse>>(async () => response);
     const runTool = vi.fn(async () => "Step 2. Marinate.");
-    const provider = new WebSpeechProvider({ runTool, requestTurn });
+    const speak = vi.fn<(text: string, signal: AbortSignal) => Promise<void>>(async () => {});
+    const provider = new WebSpeechProvider({ runTool, requestTurn, speak });
     providers.push(provider);
     const statuses: VoiceStatus[] = [];
     const turns: VoiceTurn[] = [];
     provider.onStatus((status) => statuses.push(status));
     provider.onTurn((turn) => turns.push(turn));
-    return { provider, requestTurn, runTool, statuses, turns };
+    return { provider, requestTurn, runTool, speak, statuses, turns };
   }
 
-  it("sends the first utterance, runs the tools, speaks, then listens again", async () => {
-    const { provider, requestTurn, runTool, statuses, turns } = setup();
+  it("answers one command, then closes so the cook says Hey Saffron again", async () => {
+    const { provider, requestTurn, runTool, speak, statuses, turns } = setup();
     await provider.start({ firstUtterance: "next step", context });
 
     expect(requestTurn).toHaveBeenCalledWith({ context, transcript: "next step", history: [] }, expect.any(AbortSignal));
     expect(runTool).toHaveBeenCalledWith({ name: "next_step" });
+    expect(speak).toHaveBeenCalledWith("Step 2. Marinate.", expect.any(AbortSignal));
     expect(turns).toEqual([{ who: "you", text: "next step" }, { who: "saffron", text: "Step 2. Marinate." }]);
-    expect(statuses).toEqual(["thinking", "listening"]);
-    expect(latest()).toMatchObject({ started: true, continuous: false });
+    // No more listening: the session is over and cook mode re-arms the wake word on "idle".
+    expect(statuses).toEqual(["thinking", "speaking", "idle"]);
+    expect(FakeRecognition.instances).toHaveLength(0);
   });
 
-  it("sends earlier turns as history and the latest context", async () => {
+  it("listens for the command after a bare wake word, answers it, then closes", async () => {
+    const { provider, requestTurn, statuses } = setup();
+    await provider.start({ context });
+    expect(statuses).toEqual(["listening"]);
+    latest().say("next step");
+    await vi.waitFor(() => expect(statuses.at(-1)).toBe("idle"));
+    expect(requestTurn).toHaveBeenCalledTimes(1);
+    expect(FakeRecognition.instances).toHaveLength(1);
+  });
+
+  it("stopping mid-reply cuts the voice off", async () => {
+    const { provider, speak, statuses } = setup();
+    let signal: AbortSignal | undefined;
+    speak.mockImplementationOnce((_text, s) => new Promise((resolve) => { signal = s; s.addEventListener("abort", () => resolve()); }));
+    const started = provider.start({ firstUtterance: "next step", context });
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    await provider.stop();
+    await started;
+    expect(signal!.aborted).toBe(true);
+    expect(statuses.filter((status) => status === "idle")).toHaveLength(1);
+  });
+
+  it("keeps earlier exchanges as history for the next wake word", async () => {
     const { provider, requestTurn } = setup({ say: "Fold means to mix gently.", toolCalls: [] });
     await provider.start({ firstUtterance: "next step", context });
     const updated = { ...context, currentStep: 2 };
-    provider.updateContext(updated);
-    latest().say("what does fold mean");
-    await vi.waitFor(() => expect(requestTurn).toHaveBeenCalledTimes(2));
+    // The next "Hey Saffron, what does fold mean" opens a new session with fresh context.
+    await provider.start({ firstUtterance: "what does fold mean", context: updated });
+    expect(requestTurn).toHaveBeenCalledTimes(2);
     expect(requestTurn.mock.calls[1]![0]).toMatchObject({
       context: updated,
       transcript: "what does fold mean",
@@ -208,16 +233,43 @@ describe("WebSpeechProvider", () => {
   });
 
   it("keeps timer announcements quiet while a session is open", async () => {
-    const speak = vi.fn();
+    // Finishes speaking at once, so the shared announcement queue isn't left waiting for later tests.
+    const speak = vi.fn((utterance: { onend?: () => void }) => utterance.onend?.());
     vi.stubGlobal("window", { webkitSpeechRecognition: FakeRecognition, speechSynthesis: { speak, cancel: vi.fn(), speaking: false, pending: false } });
     vi.stubGlobal("SpeechSynthesisUtterance", class { lang = ""; onend: (() => void) | null = null; onerror: (() => void) | null = null; constructor(public text: string) {} });
     const { provider } = setup();
     await provider.start({ context });
     announce("Your rice timer is done.");
+    await Promise.resolve();
     expect(speak).not.toHaveBeenCalled();
     await provider.stop();
     announce("Your rice timer is done.");
-    expect(speak).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(speak).toHaveBeenCalledTimes(1));
+  });
+
+  it("plays announcements one at a time, and a new session cuts the current one off", async () => {
+    const synth = { speak: vi.fn(), cancel: vi.fn(), speaking: false, pending: false };
+    vi.stubGlobal("window", { webkitSpeechRecognition: FakeRecognition, speechSynthesis: synth });
+    vi.stubGlobal("SpeechSynthesisUtterance", class { lang = ""; onend: (() => void) | null = null; onerror: (() => void) | null = null; constructor(public text: string) {} });
+    announce("Your rice timer is done.");
+    announce("Your simmer timer is done.");
+    await vi.advanceTimersByTimeAsync(0);
+    // The first is still speaking (no onend yet), so the second waits its turn.
+    expect(synth.speak).toHaveBeenCalledTimes(1);
+
+    const { provider } = setup();
+    await provider.start({ context });
+    expect(synth.cancel).toHaveBeenCalled();
+    // The queued one is skipped while the session is open.
+    await vi.advanceTimersByTimeAsync(100);
+    expect(synth.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("still closes the session when the voice fails", async () => {
+    const { provider, speak, statuses } = setup();
+    speak.mockRejectedValueOnce(new Error("audio device lost"));
+    await provider.start({ firstUtterance: "next step", context });
+    expect(statuses.at(-1)).toBe("idle");
   });
 
   it("ignores a repeated wake phrase on its own and keeps listening", async () => {

@@ -52,8 +52,18 @@ export function createRateLimiter({ limit, windowMs }: { limit: number; windowMs
 // Cached on globalThis so every route bundle (and dev hot reloads) share one budget.
 const globalForLimiter = globalThis as unknown as {
   __saffronAiRateLimiter?: ReturnType<typeof createRateLimiter>;
+  __saffronSpeechRateLimiter?: ReturnType<typeof createRateLimiter>;
 };
 export const aiRateLimiter = (globalForLimiter.__saffronAiRateLimiter ??= createRateLimiter({
   limit: 60,
+  windowMs: 10 * 60 * 1000,
+}));
+
+/**
+ * ElevenLabs speech (POST /api/voice/speak): 40 replies per 10 minutes per client. Separate from the
+ * AI budget so cooking by voice can't starve chat, and tighter because each call spends paid credits.
+ */
+export const speechRateLimiter = (globalForLimiter.__saffronSpeechRateLimiter ??= createRateLimiter({
+  limit: 40,
   windowMs: 10 * 60 * 1000,
 }));
