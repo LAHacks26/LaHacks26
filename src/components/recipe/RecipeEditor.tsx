@@ -9,15 +9,20 @@ import {
   useSyncExternalStore,
   type MouseEvent,
 } from "react";
+import { ChatDock } from "@/components/chat/ChatDock";
+import { useChatStore } from "@/lib/store/chatStore";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { parseAllergies, readAllergies, readAllergiesRaw, subscribeAllergies } from "@/lib/allergies";
 import type { EditAction } from "@/lib/ai/contracts";
 import { AiClientError, explainStream, requestEdit, suggestSwaps } from "@/lib/api/aiClient";
 import type { LineKind, LineRef, Recipe } from "@/lib/recipe/schema";
+import { formatClock, readyByStatus, stepClockTimes } from "@/lib/recipe/schedule";
+import { canonicalTemperatureSelection, type UnitSystem } from "@/lib/recipe/units";
 import { useRecipeStore } from "@/lib/store/recipeStore";
 import type { PopoverAction, SelectionAnchor } from "./LinePopover";
 import { type ActiveLine, RecipeView } from "./RecipeView";
+import { createRecipeSession, type RecipeSession } from "./recipeSession";
 
 // The interactive recipe page (PRD §5.3, §5.4). Owns the popover state machine and the AI calls,
 // and reads the working copy, edit lock, glow and undo toast from the store.
@@ -37,7 +42,15 @@ const LOADING_TEXT: Record<EditAction, string> = {
 export type RecipeEditorProps = {
   sourceRecipeId: string;
   recipe: Recipe;
+  readyBy?: string;
 };
+
+function subscribeMinute(onChange: () => void) {
+  const timer = setInterval(onChange, 60_000);
+  return () => clearInterval(timer);
+}
+const currentMinute = () => Math.floor(Date.now() / 60_000) * 60_000;
+const serverMinute = () => null;
 
 function messageOf(error: unknown, fallback: string): string {
   return error instanceof AiClientError ? error.message : fallback;
@@ -70,7 +83,12 @@ function withSelection(tip: LineRef, target: LineRef): LineRef {
   return target.selectedText && !tip.selectedText ? { ...tip, selectedText: target.selectedText } : tip;
 }
 
-export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
+export function RecipeEditor(props: RecipeEditorProps) {
+  // Navigation must also reset popovers, retry closures and selection state.
+  return <RecipeEditorSession key={`${props.sourceRecipeId}:${props.readyBy ?? ""}`} {...props} />;
+}
+
+function RecipeEditorSession({ sourceRecipeId, recipe, readyBy }: RecipeEditorProps) {
   const router = useRouter();
   const copy = useRecipeStore((state) => state.copy);
   const editing = useRecipeStore((state) => state.editing);
@@ -81,6 +99,19 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
   // Until the store holds this recipe's working copy, show the server recipe without interaction.
   const current = copy && copy.sourceRecipeId === sourceRecipeId ? copy : null;
   const view = current ? current.recipe : recipe;
+  const [servings, setServings] = useState<number | null>(null);
+  const [unit, setUnit] = useState<UnitSystem>("us");
+  const minute = useSyncExternalStore(subscribeMinute, currentMinute, serverMinute);
+  const timing = current?.readyBy && minute !== null
+    ? readyByStatus(new Date(current.readyBy), view.times.totalMin, new Date(minute))
+    : null;
+  const readyByDisplay = timing?.kind === "ahead"
+    ? { kind: "startBy" as const, startAt: formatClock(timing.startBy), readyAt: formatClock(timing.readyAt) }
+    : timing ? { kind: "eta" as const, readyAt: formatClock(timing.readyAt) } : undefined;
+
+  const stepTimes = timing && minute !== null
+    ? stepClockTimes(view.steps, view.times.totalMin, timing.kind === "ahead" ? timing.startBy : new Date(minute))
+    : undefined;
 
   // The server render has no allergy list, and the first client render reads the saved one, so
   // a server-rendered page with no badges can briefly differ from the hydrated one. The list is
@@ -97,8 +128,8 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
   const bodyRef = useRef(0);
   const explainRef = useRef<AbortController | null>(null);
   const suggestRef = useRef<AbortController | null>(null);
-  // Aborted on unmount only. Closing the popover does not cancel an edit, which may still apply.
-  const mountRef = useRef<AbortController | null>(null);
+  // Closing the popover does not cancel an edit; leaving this recipe does.
+  const recipeSessionRef = useRef<RecipeSession | null>(null);
   // Set for the moment after a phrase selection opens its popover, so the click that follows does not toggle it.
   const phraseGestureRef = useRef(false);
   // Re-runs the last explain or edit for "Try again".
@@ -106,21 +137,13 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
 
   // Loads this recipe before paint. load() restores this recipe's saved working copy when there is one.
   useLayoutEffect(() => {
-    useRecipeStore.getState().load(sourceRecipeId, recipe);
-    // Reload only when the source changes. A new server object for the same recipe must not wipe edits.
+    useRecipeStore.getState().load(sourceRecipeId, recipe, readyBy);
+    const scope = createRecipeSession(sourceRecipeId);
+    recipeSessionRef.current = scope;
+    return () => scope.dispose();
+    // The key remounts for a new source/deadline. A refreshed server object must not wipe edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceRecipeId]);
-
-  // Each mount gets its own abort controller. Unmount cancels the requests still in flight.
-  useEffect(() => {
-    const controller = new AbortController();
-    mountRef.current = controller;
-    return () => {
-      controller.abort();
-      explainRef.current?.abort();
-      suggestRef.current?.abort();
-    };
-  }, []);
 
   // Ctrl/Cmd+Z undoes, unless the user is typing in a field.
   useEffect(() => {
@@ -192,21 +215,23 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
   }
 
   async function prefetchSwaps(session: number, target: LineRef) {
-    const snapshot = useRecipeStore.getState().copy;
-    if (!snapshot) return;
+    const scope = recipeSessionRef.current;
+    const snapshot = scope?.currentCopy();
+    if (!scope || !snapshot) return;
     suggestRef.current?.abort();
     const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, scope.signal]);
     suggestRef.current = controller;
     patch(session, null, { suggestions: undefined, suggestionsLoading: true, suggestionsError: undefined });
     try {
       const suggestions = await suggestSwaps(
         { recipe: snapshot.recipe, target, allergies: readAllergies() },
-        controller.signal
+        signal
       );
-      if (controller.signal.aborted) return;
+      if (signal.aborted || !scope.currentCopy()) return;
       patch(session, null, { suggestions, suggestionsLoading: false });
     } catch (error) {
-      if (controller.signal.aborted) return;
+      if (signal.aborted || !scope.currentCopy()) return;
       patch(session, null, {
         suggestionsLoading: false,
         suggestionsError: messageOf(error, SUGGEST_ERROR),
@@ -217,11 +242,13 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
   }
 
   async function runExplain(target: LineRef) {
-    const snapshot = useRecipeStore.getState().copy;
-    if (!snapshot || snapshot.sourceRecipeId !== sourceRecipeId) return;
+    const scope = recipeSessionRef.current;
+    const snapshot = scope?.currentCopy();
+    if (!scope || !snapshot) return;
     const session = sessionRef.current;
     explainRef.current?.abort();
     const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, scope.signal]);
     explainRef.current = controller;
     const body = ++bodyRef.current;
     retryRef.current = () => void runExplain(target);
@@ -231,15 +258,21 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
       const text = await explainStream(
         { recipe: snapshot.recipe, target, allergies: readAllergies() },
         {
-          signal: controller.signal,
-          onChunk: (textSoFar) => patch(session, body, { explanation: textSoFar }),
+          signal,
+          onChunk: (textSoFar) => {
+            if (!signal.aborted && scope.currentCopy()) patch(session, body, { explanation: textSoFar });
+          },
         }
       );
-      if (controller.signal.aborted) return;
-      const tipId = useRecipeStore.getState().addTip(target, text);
+      if (signal.aborted || !scope.currentCopy()) return;
+      const tipId = scope.saveExplanation(target, text, snapshot.version);
+      if (tipId === null) {
+        patch(session, body, { mode: "error", error: STALE_ERROR });
+        return;
+      }
       patch(session, body, { explanation: text, saved: tipId !== null });
     } catch (error) {
-      if (controller.signal.aborted) return;
+      if (signal.aborted || !scope.currentCopy()) return;
       patch(session, body, { mode: "error", error: messageOf(error, FALLBACK_ERROR) });
     } finally {
       if (explainRef.current === controller) explainRef.current = null;
@@ -254,10 +287,10 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
     action: EditAction,
     message: string | undefined,
     question: string | undefined,
-    signal: AbortSignal,
+    scope: RecipeSession,
   ): Promise<"done" | "stale"> {
-    const snapshot = useRecipeStore.getState().copy;
-    if (!snapshot || snapshot.sourceRecipeId !== sourceRecipeId) return "done";
+    const snapshot = scope.currentCopy();
+    if (!snapshot || !scope.ownsEdit()) return "done";
     try {
       const response = await requestEdit(
         {
@@ -268,12 +301,14 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
           message,
           allergies: readAllergies(),
         },
-        signal
+        scope.signal
       );
       const store = useRecipeStore.getState();
       // The working copy may have switched to another recipe while the request ran. Never apply it there.
-      if (store.copy?.sourceRecipeId !== sourceRecipeId) return "done";
+      if (!scope.ownsEdit()) return "done";
       const result = response.result;
+      // Answers and rejections are also tied to the version they were requested against.
+      if (store.copy?.version !== response.baseVersion) return "stale";
 
       if (result.kind === "patch") {
         const outcome = store.applyEdit(result, response.baseVersion);
@@ -315,7 +350,7 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
       }
       return "done";
     } catch (error) {
-      if (signal.aborted) return "done";
+      if (!scope.ownsEdit()) return "done";
       const message = messageOf(error, FALLBACK_ERROR);
       settleEdit(session, body, { mode: "error", error: message }, message);
       return "done";
@@ -328,13 +363,12 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
     message: string | undefined,
     question?: string,
   ) {
-    const store = useRecipeStore.getState();
-    const signal = mountRef.current?.signal;
-    if (!signal || store.editing || !store.copy || store.copy.sourceRecipeId !== sourceRecipeId) return;
+    const scope = recipeSessionRef.current;
+    if (!scope?.beginEdit(target)) return;
+    interruptExplain();
     const session = sessionRef.current;
     const body = ++bodyRef.current;
     retryRef.current = () => void runEdit(target, action, message, question);
-    store.setEditing(target);
     patch(session, body, {
       mode: "loading",
       loadingText: LOADING_TEXT[action],
@@ -348,13 +382,12 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
       // A stale result means the recipe changed while the request ran. Re-run once on the fresh copy.
       let outcome: "done" | "stale" = "stale";
       for (let attempt = 0; attempt < 2 && outcome === "stale"; attempt++) {
-        outcome = await attemptEdit(session, body, target, action, message, question, signal);
+        outcome = await attemptEdit(session, body, target, action, message, question, scope);
       }
       if (outcome === "stale") settleEdit(session, body, { mode: "error", error: STALE_ERROR }, STALE_ERROR);
     } finally {
-      // applyEdit clears the lock itself. Clear it here only when nothing else did.
-      const state = useRecipeStore.getState();
-      if (state.editing) state.setEditing(null);
+      // Never release a lock acquired by another editor while this request was pending.
+      scope.finishEdit();
     }
   }
 
@@ -414,12 +447,14 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
 
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || selection.rangeCount === 0) return;
-    const text = selection.toString().trim();
+    const displayedText = selection.toString().trim();
     const row = lineElementOf(selection.anchorNode);
-    if (!text || !row || row !== lineElementOf(selection.focusNode)) return;
+    if (!displayedText || !row || row !== lineElementOf(selection.focusNode)) return;
 
     const step = view.steps.find((item) => item.id === row.dataset.lineId);
-    if (!step || !normalizeText(step.text).includes(normalizeText(text))) return;
+    if (!step) return;
+    const text = canonicalTemperatureSelection(normalizeText(step.text), unit, normalizeText(displayedText));
+    if (!text) return;
 
     // The same phrase is already open: nothing to do.
     if (active && active.kind === "step" && active.id === step.id && active.selectedText === text) return;
@@ -459,7 +494,25 @@ export function RecipeEditor({ sourceRecipeId, recipe }: RecipeEditorProps) {
       className={current ? undefined : "pointer-events-none opacity-60"}
     >
       <RecipeView
+        chatDock={current ? <ChatDock recipeKey={sourceRecipeId} /> : null}
+        onContinueChat={(line) => {
+          const chat = useChatStore.getState();
+          const label = line.selectedText ?? line.label ?? (line.kind === "ingredient"
+            ? view.ingredients.find((item) => item.id === line.id)?.item
+            : line.kind === "appliance" ? view.appliances.find((item) => item.id === line.id)?.name
+              : `Step ${view.steps.findIndex((item) => item.id === line.id) + 1}`) ?? line.id;
+          chat.attach(targetOf(line), label);
+          if (line.question) chat.append({ role: "user", content: line.question });
+          if (line.explanation) chat.append({ role: "assistant", content: line.explanation });
+          closePopover();
+        }}
+        servings={servings ?? view.servings}
+        unit={unit}
+        onServingsChange={setServings}
+        onUnitChange={setUnit}
+        stepTimes={stepTimes}
         recipe={view}
+        readyBy={readyByDisplay}
         allergies={allergies}
         readOnly={!current}
         active={active}

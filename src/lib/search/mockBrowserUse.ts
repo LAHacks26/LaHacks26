@@ -6,6 +6,8 @@ import { mockCandidatesFor } from "./mockResults";
 // progress is computed from the clock when poll() runs, so it is easy to test.
 
 export const MOCK_DURATION_MS = 8_000;
+/** Reap abandoned tasks on the next start/poll without adding process timers. */
+export const MOCK_TASK_TTL_MS = 10 * 60_000;
 
 const STEP_SCRIPT = [
   "Opening Allrecipes…",
@@ -20,7 +22,6 @@ const STEP_SCRIPT = [
 type MockTask = {
   startedAt: number;
   dishQuery: string;
-  cancelled: boolean;
 };
 
 export type MockClientOptions = {
@@ -39,26 +40,34 @@ export class MockBrowserUseClient implements BrowserUseClient {
   }
 
   async start(_prompt: string, opts: StartOptions): Promise<{ taskId: string; liveUrl: string | null }> {
+    this.pruneExpired();
     const taskId = globalThis.crypto.randomUUID();
-    this.tasks.set(taskId, { startedAt: this.now(), dishQuery: opts.dishQuery, cancelled: false });
+    this.tasks.set(taskId, { startedAt: this.now(), dishQuery: opts.dishQuery });
     return { taskId, liveUrl: null };
   }
 
   async poll(taskId: string): Promise<AgentPoll> {
+    this.pruneExpired();
     const task = this.tasks.get(taskId);
     if (!task) throw new Error("Unknown mock task.");
 
     const steps = stepsSoFar(task.dishQuery, this.now() - task.startedAt, this.durationMs);
-    if (task.cancelled) return { status: "failed", steps };
-
     const elapsed = this.now() - task.startedAt;
     if (elapsed < this.durationMs) return { status: "running", steps };
+    // The search registry replays the terminal event; the mock need not retain the task.
+    this.tasks.delete(taskId);
     return { status: "finished", steps: stepsSoFar(task.dishQuery, this.durationMs, this.durationMs), candidates: mockCandidatesFor(task.dishQuery) };
   }
 
   async cancel(taskId: string): Promise<void> {
-    const task = this.tasks.get(taskId);
-    if (task) task.cancelled = true;
+    this.tasks.delete(taskId);
+  }
+
+  private pruneExpired(): void {
+    const cutoff = this.now() - MOCK_TASK_TTL_MS;
+    for (const [id, task] of this.tasks) {
+      if (task.startedAt <= cutoff) this.tasks.delete(id);
+    }
   }
 }
 

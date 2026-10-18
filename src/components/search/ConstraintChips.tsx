@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { formatReadyBy } from "@/lib/mocks/search";
+import { defaultReadyByClock } from "@/lib/recipe/readyBy";
 
 export type ConstraintChipsProps = {
   /** Labels of the active constraints, e.g. ["Vegan"]. */
@@ -47,7 +48,9 @@ export function ConstraintChips({
         );
       })}
 
-      <Popover>
+      <Popover onOpenChange={(open) => {
+        if (open && !readyBy) onReadyByChange(defaultReadyByClock(new Date()));
+      }}>
         {/* Base UI injects the trigger's onClick, which makes Chip render a button. */}
         <PopoverTrigger
           render={
@@ -72,7 +75,7 @@ export function ConstraintChips({
           />
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs text-muted-foreground">
-              Recipes that take longer are left out.
+              Earlier times mean tomorrow. Recipes that take longer are left out.
             </p>
             <Button
               variant="ghost"

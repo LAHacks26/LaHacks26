@@ -13,6 +13,7 @@ import {
   getBrowserUseClient,
 } from "./browserUse";
 import { findCached } from "./cache";
+import { constraintViolations } from "./constraints";
 import { maxTotalMinutes, mergeConstraints, type ParsedQuery, parseQuery } from "./parseQuery";
 import { isTerminalEvent } from "./sse";
 import { logSearchStart, logSearchUpdate } from "./searchLog";
@@ -196,7 +197,7 @@ async function executeRun(run: Run): Promise<void> {
     return;
   }
 
-  await Promise.all(candidates.map((candidate) => processCandidate(run, candidate, parsed.maxTotalMin)));
+  await Promise.all(candidates.map((candidate) => processCandidate(run, candidate, parsed.maxTotalMin, parsed.constraints)));
   endRun(run, { type: "done" }, "done");
 }
 
@@ -239,7 +240,7 @@ async function awaitAgent(run: Run, client: BrowserUseClient, taskId: string): P
 }
 
 /** Imports one candidate. Emits a basic card from JSON-LD, then the full card or a drop reason. */
-async function processCandidate(run: Run, candidate: AgentCandidate, maxTotalMin: number | undefined): Promise<void> {
+async function processCandidate(run: Run, candidate: AgentCandidate, maxTotalMin: number | undefined, constraints: string[]): Promise<void> {
   try {
     const result = await importRecipe(candidate.url, {
       onParsed: (info) => {
@@ -271,6 +272,11 @@ async function processCandidate(run: Run, candidate: AgentCandidate, maxTotalMin
     }
     if (maxTotalMin !== undefined && row.totalMin > maxTotalMin) {
       emit(run, { type: "candidate_dropped", url: candidate.url, reason: "too long" });
+      return;
+    }
+    const violations = constraintViolations(row.recipe, constraints);
+    if (violations.length > 0) {
+      emit(run, { type: "candidate_dropped", url: candidate.url, reason: `Doesn't meet: ${violations.join(", ")}` });
       return;
     }
 

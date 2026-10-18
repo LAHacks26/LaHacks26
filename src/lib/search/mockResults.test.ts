@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildAgentPrompt } from "./browserUse";
-import { MockBrowserUseClient, stepsSoFar } from "./mockBrowserUse";
+import { MOCK_TASK_TTL_MS, MockBrowserUseClient, stepsSoFar } from "./mockBrowserUse";
 import { mockCandidatesFor } from "./mockResults";
 
 vi.mock("server-only", () => ({}));
@@ -87,13 +87,27 @@ describe("MockBrowserUseClient", () => {
     expect(done.status).toBe("finished");
     expect(done.steps.length).toBeGreaterThan(early.steps.length);
     expect(done.candidates).toEqual(mockCandidatesFor("butter chicken"));
+    await expect(client.poll(taskId)).rejects.toThrow("Unknown mock task");
   });
 
-  it("reports failure after cancel", async () => {
+  it("releases a cancelled task immediately, even without another poll", async () => {
     const client = new MockBrowserUseClient({ now: () => 0 });
     const { taskId } = await client.start("prompt", { dishQuery: "pasta", constraints: [], maxSteps: 25 });
     await client.cancel(taskId);
-    expect((await client.poll(taskId)).status).toBe("failed");
+    await client.cancel(taskId); // Idempotent after deletion.
+    await expect(client.poll(taskId)).rejects.toThrow("Unknown mock task");
+  });
+
+  it("reaps abandoned tasks while preserving newly started tasks", async () => {
+    let now = 0;
+    const client = new MockBrowserUseClient({ now: () => now });
+    const options = { dishQuery: "pasta", constraints: [], maxSteps: 25 };
+    const old = await client.start("prompt", options);
+    now += MOCK_TASK_TTL_MS;
+    const current = await client.start("prompt", options);
+    await expect(client.poll(old.taskId)).rejects.toThrow("Unknown mock task");
+    expect((await client.poll(current.taskId)).status).toBe("running");
+    await client.cancel(current.taskId);
   });
 });
 

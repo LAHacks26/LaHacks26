@@ -34,9 +34,10 @@ describe("maxTotalMinutes", () => {
     expect(maxTotalMinutes("2026-10-18T17:45:00Z", NOW)).toBe(40);
   });
 
-  it("never goes below 15 minutes", () => {
-    expect(maxTotalMinutes("2026-10-18T17:08:00Z", NOW)).toBe(15);
-    expect(maxTotalMinutes("2026-10-18T16:30:00Z", NOW)).toBe(15);
+  it("does not invent extra time for imminent or past deadlines", () => {
+    expect(maxTotalMinutes("2026-10-18T17:08:00Z", NOW)).toBe(3);
+    expect(maxTotalMinutes("2026-10-18T17:04:00Z", NOW)).toBe(0);
+    expect(maxTotalMinutes("2026-10-18T16:30:00Z", NOW)).toBe(0);
   });
 
   it("uses a time the text implies when it is lower than the ready-by budget", () => {

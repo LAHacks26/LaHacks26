@@ -5,12 +5,14 @@ import { RecipeEditor } from "@/components/recipe";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { getSourceRecipe } from "@/lib/db/sourceRecipes";
 import { type Recipe, RecipeSchema } from "@/lib/recipe/schema";
+import { parseReadyBy } from "@/lib/recipe/readyBy";
 
 // The cached row can change when a pasted link is re-imported, so never prerender it.
 export const dynamic = "force-dynamic";
 
 type RecipePageProps = {
   params: Promise<{ sourceId: string }>;
+  searchParams: Promise<{ readyBy?: string | string[] }>;
 };
 
 // Shared by generateMetadata and the page, so one request reads the row once.
@@ -35,8 +37,9 @@ export async function generateMetadata({ params }: RecipePageProps): Promise<Met
   };
 }
 
-export default async function RecipePage({ params }: RecipePageProps) {
+export default async function RecipePage({ params, searchParams }: RecipePageProps) {
   const { sourceId } = await params;
+  const readyBy = parseReadyBy((await searchParams).readyBy);
   const recipe = await loadRecipe(sourceId);
   if (!recipe) {
     notFound();
@@ -46,7 +49,7 @@ export default async function RecipePage({ params }: RecipePageProps) {
     <div className="flex min-h-dvh flex-1 flex-col">
       <AppHeader />
       <main className="flex-1">
-        <RecipeEditor sourceRecipeId={sourceId} recipe={recipe} />
+        <RecipeEditor sourceRecipeId={sourceId} recipe={recipe} readyBy={readyBy} />
       </main>
     </div>
   );

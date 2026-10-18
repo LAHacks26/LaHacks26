@@ -4,6 +4,7 @@ import { generateJson } from "../ai/gemini";
 import { SYSTEM_PREAMBLE } from "../ai/prompts";
 import { fenceUntrusted } from "../ai/untrusted";
 import { SEARCH_CONSTRAINTS } from "./types";
+import { maxTotalMinFor } from "../recipe/schedule";
 
 // Query parsing (PRD §10 step 1). One Flash call with structured output. Results are cached in
 // memory by text + chips, so a repeated search does not spend a Gemini call.
@@ -26,8 +27,6 @@ type ModelOutput = z.infer<typeof ModelOutputSchema>;
 
 /** Minutes kept back from the ready-by time, so the food is ready with a little slack. */
 export const READY_BY_BUFFER_MIN = 5;
-/** A ready-by budget never goes below this, even when the ready-by time is nearly here. */
-export const MIN_READY_BY_BUDGET_MIN = 15;
 
 const CACHE_LIMIT = 200;
 const cache = new Map<string, ModelOutput>();
@@ -53,7 +52,7 @@ export function mergeConstraints(chips: string[], implied: string[]): string[] {
 
 /**
  * The most total minutes a recipe may take. It is the lower of two limits:
- * the ready-by budget (ready-by minus now minus a 5 minute buffer, never below 15), and the time
+ * the ready-by budget (ready-by minus now minus a 5 minute buffer, floored at zero), and the time
  * the text implies. Undefined when neither applies.
  */
 export function maxTotalMinutes(readyBy: string | undefined, now: Date, impliedMin?: number): number | undefined {
@@ -61,8 +60,7 @@ export function maxTotalMinutes(readyBy: string | undefined, now: Date, impliedM
   if (readyBy) {
     const readyMs = Date.parse(readyBy);
     if (Number.isFinite(readyMs)) {
-      const untilMin = Math.floor((readyMs - now.getTime()) / 60_000);
-      budgets.push(Math.max(MIN_READY_BY_BUDGET_MIN, untilMin - READY_BY_BUFFER_MIN));
+      budgets.push(maxTotalMinFor(new Date(readyMs), now, READY_BY_BUFFER_MIN));
     }
   }
   if (impliedMin !== undefined && impliedMin > 0) budgets.push(impliedMin);

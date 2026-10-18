@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { parseReadyBy } from "../recipe/readyBy";
 import { PatchError, addTip as addTipToRecipe, applyEditResult } from "../recipe/patch";
 import {
   UNDO_LIMIT,
@@ -15,7 +16,7 @@ export type RecipeStoreState = {
   /** null until `load` runs. */
   copy: WorkingCopy | null;
   /** The one edit that may run at a time (Explain is not an edit). Affected lines shimmer while set. */
-  editing: { target: LineRef } | null;
+  editing: { target: LineRef | null } | null;
   /** Lines to glow after an edit. `key` changes on every edit so the same IDs can glow again. */
   glow: { ids: string[]; key: number } | null;
   /** Undo toast for the last applied edit, or null once dismissed or undone. */
@@ -29,9 +30,10 @@ export type RecipeStoreActions = {
    * Opens a recipe. Restores the localStorage working copy for this `sourceRecipeId` when one exists
    * and parses with WorkingCopySchema; otherwise starts fresh at version 0. Clears editing/glow/toast.
    */
-  load(sourceRecipeId: string, recipe: Recipe): void;
+  load(sourceRecipeId: string, recipe: Recipe, readyBy?: string): void;
   /** Marks an edit as running, or clears it. */
   setEditing(target: LineRef | null): void;
+  beginWholeRecipeEdit(): void;
   /**
    * Applies a "patch" result if `baseVersion` still equals the current version: pushes the old
    * recipe on the undo stack (max UNDO_LIMIT), bumps version, sets glow and toast, persists.
@@ -99,10 +101,14 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   glow: null,
   toast: null,
   newTipIds: [],
-  load(sourceRecipeId, recipe) {
+  load(sourceRecipeId, recipe, readyBy) {
     const restored = readStoredCopy(sourceRecipeId);
+    const deadline = parseReadyBy(readyBy);
+    const copy = restored ?? { recipe, version: 0, undoStack: [], sourceRecipeId };
+    const next = deadline ? { ...copy, readyBy: deadline } : copy;
+    if (deadline) persistCopy(next);
     set({
-      copy: restored ?? { recipe, version: 0, undoStack: [], sourceRecipeId },
+      copy: next,
       editing: null,
       glow: null,
       toast: null,
@@ -111,6 +117,9 @@ export const useRecipeStore = create<RecipeStore>()((set, get) => ({
   },
   setEditing(target) {
     set({ editing: target ? { target } : null });
+  },
+  beginWholeRecipeEdit() {
+    if (!get().editing) set({ editing: { target: null } });
   },
   applyEdit(result, baseVersion) {
     const { copy, editing } = get();

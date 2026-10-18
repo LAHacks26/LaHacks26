@@ -21,7 +21,7 @@ export const SEARCH_FALLBACK_ERROR = "Couldn't start the search. Try again.";
 const IMPORT_FALLBACK_ERROR = "Couldn't import that page. Try another link.";
 const IMPORT_TIMEOUT_ERROR = "That page took too long. Try another link.";
 const IMPORT_TIMEOUT_MS = 60_000;
-const ALLERGIES_KEY = "saffron:allergies";
+export { readAllergies } from "../allergies";
 
 /** How long a new EventSource (or a browser retry) may take to open before we give up. */
 export const CONNECT_TIMEOUT_MS = 15_000;
@@ -255,22 +255,5 @@ export async function importRecipeLink(url: string, signal?: AbortSignal): Promi
   } finally {
     window.clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
-  }
-}
-
-/** The allergy list from localStorage (`saffron:allergies`). Empty when nothing is stored or storage is blocked. */
-export function readAllergies(): string[] {
-  try {
-    const raw = window.localStorage.getItem(ALLERGIES_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    return parsed.filter((item): item is string => typeof item === "string");
-  } catch {
-    return [];
   }
 }

@@ -31,19 +31,20 @@ export class AiClientError extends Error {
 }
 
 /**
- * Runs one request with a 30 s timeout that also honors the caller's signal. Anything thrown by
+ * Runs one request with a configurable timeout (30 s by default) that also honors the caller's signal. Anything thrown by
  * the request becomes an AiClientError: the caller's abort, the timeout, or a network failure.
  */
 async function withTimeout<T>(
   signal: AbortSignal | undefined,
   run: (requestSignal: AbortSignal) => Promise<T>,
+  timeoutMs = TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, TIMEOUT_MS);
+  }, timeoutMs);
   const forwardAbort = () => controller.abort();
   if (signal?.aborted) controller.abort();
   signal?.addEventListener("abort", forwardAbort);
@@ -74,11 +75,12 @@ async function serverError(response: Response): Promise<AiClientError> {
   return new AiClientError(FALLBACK_ERROR, "server");
 }
 
-async function postJson<T>(
+export async function postJson<T>(
   path: string,
   body: unknown,
   schema: z.ZodType<T>,
   signal?: AbortSignal,
+  timeoutMs = TIMEOUT_MS,
 ): Promise<T> {
   return withTimeout(signal, async (requestSignal) => {
     const response = await fetch(path, {
@@ -96,7 +98,7 @@ async function postJson<T>(
     const parsed = schema.safeParse(json);
     if (!parsed.success) throw new AiClientError(INVALID_ERROR, "invalid");
     return parsed.data;
-  });
+  }, timeoutMs);
 }
 
 export type ExplainStreamOptions = {
@@ -152,5 +154,5 @@ export async function suggestSwaps(req: SuggestSwapsRequest, signal?: AbortSigna
 
 /** Runs one edit (POST /api/ai/edit). The result is validated, but not applied. */
 export async function requestEdit(req: EditRequest, signal?: AbortSignal): Promise<EditResponse> {
-  return postJson("/api/ai/edit", req, EditResponseSchema, signal);
+  return postJson("/api/ai/edit", req, EditResponseSchema, signal, req.action === "missing_appliance" ? 45_000 : TIMEOUT_MS);
 }

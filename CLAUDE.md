@@ -3,6 +3,25 @@
 A recipe browser: a Browser Use agent finds recipes, Gemini rewrites them into a clean layout, and every line can be clicked to ask about it, substitute it or adapt it. The spec is `docs/PRD.md`; it is the source of truth. Current progress and the next tasks are in `docs/HANDOFF.md`; update it when you finish a task.
 Update this file after every mistake an agent makes so it doesn't repeat.
 
+## Session handoff (Claude Code and Codex)
+
+### Starting or resuming work
+
+- Read the latest on-disk `docs/HANDOFF.md`, `AGENTS.md`, this file, and the relevant PRD sections. Do not rely solely on a previous agent's conversation summary.
+- Check `git status --short --branch` and relevant recent commits, including merges into `main` and changes to the files involved in the next task. Compare them with the handoff's recorded branch and commit; if no baseline is recorded, use the last handoff commit as a starting point.
+- When the handoff is stale or remote freshness matters, check for newer commits. Fetch remote refs when network access and the user's scope permit, then inspect the relevant history without automatically pulling, switching branches, or merging. If fetching is unavailable or the task is strictly read-only, state that remote freshness is unverified.
+- Treat the PRD as intended behavior and code plus Git history as implementation evidence. Reconcile discrepancies with targeted inspection. Reuse prior verified findings when the relevant code and environment have not changed; do not redo completed implementation or an entire audit by default. Run the checks required for the current task, and expand investigation only for new failures, relevant changes, or unresolved risks.
+- Preserve existing edits and unfinished work. Identify what is already implemented, what remains unverified, and the next concrete task before making changes.
+
+### Completing or handing off work
+
+- Update `docs/HANDOFF.md` after each completed development task and before handing off unfinished work, within the user's authorized file scope. If documentation edits are excluded, provide the handoff details in the response instead and state that the file was not updated.
+- Record the date, branch, and commit baseline used for verification. Identify uncommitted work separately; distinguish local completion from merged or deployed status.
+- Summarize completed behavior and relevant files, exact checks run and their results, tested user flows, and anything skipped, blocked, or still untested. Do not carry historical passing results forward as if they were rerun.
+- Record outstanding bugs with reproduction steps or supporting evidence, label assumptions and suspected issues, and leave prioritized next tasks with acceptance criteria. Remove or revise obsolete task/status claims so the next agent does not repeat completed work.
+- Preserve setup knowledge needed on another machine: runtime/tool prerequisites, installation and build commands, required env variable names, non-secret configuration choices, and network or deployment limitations. Distinguish a populated credential from verified service connectivity. Never copy API keys, tokens, passwords, connection strings, private keys, or `.env.local` contents into documentation or logs; reference the ignored file and private transfer process instead.
+- AI review is an additional check, not a replacement for automated validation or human review. Report review findings and remaining uncertainty so the user can assess the change. Review does not grant permission to commit, merge, push, or deploy; follow the user's instructions for those actions. This clarification takes precedence over older handoff wording that says no human reviews code.
+
 ## Stack
 - **Next.js** (App Router, TypeScript, `src/` directory). One app holds both frontend and API routes. Node runtime only, never edge.
 - **Tailwind CSS v4 + shadcn/ui**, lucide icons, `motion` for animation. **Light theme only** (cream). Design tokens live in `src/app/globals.css`. Fonts: Fraunces (display) and Inter (body).
@@ -34,7 +53,7 @@ Copy `.env.example` to `.env.local` and fill it in. Never commit any `.env*` fil
 ## Workflow
 1. **PRD** — Opus, high effort. Expand the idea with `/grill-me` (or `/jmo-workflow:interview`), review the app flow with `/lavish`, loop between the two. Save the PRD in `docs/PRD.md`.
 2. **UI mocks** — generate mocks from the final PRD; polish with `/jmo-workflow:better-ui` and `/jmo-workflow:animate`.
-3. **Build** — Opus orchestrates. Split work into sub-tasks, hand each to the `builder` agent (Haiku), and have the `reviewer` agent (Sonnet) review every change before it is committed. Nobody reviews code by hand; the reviewer is the safety net.
+3. **Build** — Opus orchestrates. Split work into sub-tasks, hand each to the `builder` agent (Haiku), and have the `reviewer` agent (Sonnet) review every change before it is committed. AI review supplements automated checks and human review; surface findings and remaining risks for the user rather than treating agent approval as sufficient assurance.
 4. **Test** — use `agent-browser` to click through every part of the site and fix what breaks.
 
 ## Subagent rules

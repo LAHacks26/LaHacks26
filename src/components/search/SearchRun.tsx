@@ -13,6 +13,7 @@ import {
 } from "@/lib/search/client";
 import { formatReadyBy, type AgentStep } from "@/lib/mocks/search";
 import type { CandidateCardData } from "@/lib/search/types";
+import { recipeHref } from "@/lib/recipe/readyBy";
 import { cn } from "@/lib/utils";
 import { AgentStepLog } from "./AgentStepLog";
 import { CachedStrip, type CachedStripItem } from "./CachedStrip";
@@ -67,7 +68,7 @@ export function SearchRun({ searchId }: { searchId: string }) {
     site: item.site,
     totalMin: item.totalMin,
     imageUrl: item.imageUrl,
-    href: `/recipe/${item.sourceRecipeId}`,
+    href: recipeHref(item.sourceRecipeId, meta?.readyBy),
   }));
   const stepItems: AgentStep[] =
     steps.length === 0
@@ -113,7 +114,8 @@ export function SearchRun({ searchId }: { searchId: string }) {
     try {
       const sourceRecipeId = await importRecipeLink(url, controller.signal);
       // Stay busy until the navigation replaces this screen.
-      router.push(`/recipe/${sourceRecipeId}`);
+      if (controller.signal.aborted) return;
+      router.push(recipeHref(sourceRecipeId, meta?.readyBy));
     } catch (caught) {
       if (controller.signal.aborted) {
         return;
@@ -188,6 +190,7 @@ export function SearchRun({ searchId }: { searchId: string }) {
                   cards={shownCards}
                   userAllergies={allergies}
                   readyBy={meta?.readyBy ? formatReadyBy(readyByClock(meta.readyBy)) : null}
+                  readyByIso={meta?.readyBy}
                 />
               ) : null}
 
@@ -257,13 +260,14 @@ function ErrorPanel({
 }
 
 type CandidatesSectionProps = {
+  readyByIso?: string;
   cards: CandidateCardData[];
   userAllergies: string[];
   /** Formatted ready-by time, or null when the search had none. */
   readyBy: string | null;
 };
 
-function CandidatesSection({ cards, userAllergies, readyBy }: CandidatesSectionProps) {
+function CandidatesSection({ cards, userAllergies, readyBy, readyByIso }: CandidatesSectionProps) {
   const count = cards.length;
   const noun = count === 1 ? "recipe" : "recipes";
   const heading = readyBy ? `${count} ${noun} ready by ${readyBy}` : `${count} ${noun} found`;
@@ -299,7 +303,7 @@ function CandidatesSection({ cards, userAllergies, readyBy }: CandidatesSectionP
                   entranceIndex={index}
                   imageUrl={card.imageUrl}
                   pending={!ready}
-                  href={ready ? `/recipe/${card.sourceRecipeId}` : undefined}
+                  href={ready ? recipeHref(card.sourceRecipeId!, readyByIso) : undefined}
                 />
               </motion.li>
             );

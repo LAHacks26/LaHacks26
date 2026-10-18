@@ -7,6 +7,7 @@ import { type AgentCandidate, type AgentStatus, type BrowserUseClient, getBrowse
 import { parseQuery } from "./parseQuery";
 import { type SearchRequest, startSearch, subscribe } from "./runSearch";
 import type { SearchEvent } from "./types";
+import { butterChicken } from "../recipe/fixtures/butterChicken";
 
 vi.mock("server-only", () => ({}));
 vi.mock("../ai/gemini", () => ({
@@ -100,7 +101,7 @@ function rowFor(id: string): SourceRecipe {
     imageUrl: null,
     totalMin: rowTotals.get(url) ?? 40,
     allergens: ["dairy"],
-    recipe: { difficulty: { score: 2 } },
+    recipe: butterChicken,
   } as unknown as SourceRecipe;
 }
 
@@ -140,6 +141,15 @@ afterEach(() => {
 });
 
 describe("runSearch: happy path", () => {
+  it("drops normalized recipes violating selected constraints before making them selectable", async () => {
+    vi.mocked(parseQuery).mockResolvedValue({ dishQuery: "chicken", constraints: ["Vegetarian"], isFood: true });
+    vi.mocked(getBrowserUseClient).mockReturnValue(makeAgent("finish").client);
+    const { events } = startRun("constraints");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(events.filter((event) => event.type === "candidate_ready")).toHaveLength(0);
+    expect(events.filter((event) => event.type === "candidate_dropped")).toHaveLength(3);
+    expect(types(events).at(-1)).toBe("done");
+  });
   it("emits meta, cached, agent_started, steps, candidates, then done", async () => {
     const agent = makeAgent("finish");
     vi.mocked(getBrowserUseClient).mockReturnValue(agent.client);

@@ -1,3 +1,4 @@
+import { formatClock } from "@/lib/recipe/schedule";
 import type { ReactElement, ReactNode } from "react";
 import { TimerChip } from "@/components/saffron";
 import type { Step, Timer } from "@/lib/recipe/schema";
@@ -6,6 +7,7 @@ import { TipBlock } from "./TipBlock";
 
 export type StepListProps = {
   steps: Step[];
+  clockTimes?: Date[];
   /** Phrase to highlight inside one step. */
   highlight?: { stepId: string; text: string };
   glowIds?: string[];
@@ -41,6 +43,7 @@ function withHighlight(text: string, phrase: string): ReactNode {
 
 export function StepList({
   steps,
+  clockTimes,
   highlight,
   glowIds = [],
   glowKey,
@@ -78,6 +81,7 @@ export function StepList({
             </span>
             <span className="flex min-w-0 flex-1 flex-col items-start gap-2">
               <span>{phrase ? withHighlight(step.text, phrase) : step.text}</span>
+              {clockTimes?.[index] ? <time className="text-xs text-muted-foreground" dateTime={clockTimes[index].toISOString()}>Approx. {formatClock(clockTimes[index])}</time> : null}
               {step.timer ? <TimerChip label={timerLabel(step.timer)} /> : null}
             </span>
             {/* Keyed by glowKey, so a new edit restarts the fade even on the same steps. */}

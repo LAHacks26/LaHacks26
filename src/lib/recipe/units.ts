@@ -190,7 +190,7 @@ function roundToFive(n: number): number {
  * Converts °F ↔ °C in step text to the target system, rounding to the nearest 5 degrees.
  * Leaves text alone when it already gives both scales, e.g. "375 degrees F (190 degrees C)".
  */
-export function convertTemperaturesInText(text: string, system: UnitSystem): string {
+export function convertTemperaturesInText(text: string, system: UnitSystem, onConversion?: (offset: number, original: string, converted: string) => void): string {
   const toF = system === "us";
   return text.replace(
     TEMP_RE,
@@ -208,9 +208,47 @@ export function convertTemperaturesInText(text: string, system: UnitSystem): str
       };
       const newUnit = toF ? (unit.length > 1 ? "Fahrenheit" : "F") : unit.length > 1 ? "Celsius" : "C";
       const tail = second === undefined ? "" : `${rangeSep ?? ""}${convert(second)}`;
-      return `${convert(first)}${tail}${unitSep}${newUnit}`;
+      const converted = `${convert(first)}${tail}${unitSep}${newUnit}`;
+      onConversion?.(offset, match, converted);
+      return converted;
     },
   );
+}
+
+/** Converts a highlighted phrase with its surrounding context (including dual-scale pairs). */
+export function displayTemperatureSelection(text: string, system: UnitSystem, selection: string): string {
+  const start = text.indexOf(selection);
+  if (start < 0) return selection;
+  let displayStart = start;
+  let displayEnd = start + selection.length;
+  const display = convertTemperaturesInText(text, system, (offset, original, converted) => {
+    const delta = converted.length - original.length;
+    if (offset + original.length <= start) displayStart += delta;
+    if (offset + original.length <= start + selection.length) displayEnd += delta;
+  });
+  return display.slice(displayStart, displayEnd);
+}
+
+/** Maps a displayed selection back to canonical text; partial temperatures select the whole token. */
+export function canonicalTemperatureSelection(text: string, system: UnitSystem, selection: string): string | null {
+  const changes: { offset: number; original: string; converted: string }[] = [];
+  const display = convertTemperaturesInText(text, system, (offset, original, converted) => {
+    changes.push({ offset, original, converted });
+  });
+  const start = display.indexOf(selection);
+  if (!selection || start < 0) return null;
+  function sourceOffset(position: number, end: boolean): number {
+    let delta = 0;
+    for (const change of changes) {
+      const left = change.offset + delta;
+      const right = left + change.converted.length;
+      if (position <= left) break;
+      if (position < right) return change.offset + (end ? change.original.length : 0);
+      delta += change.converted.length - change.original.length;
+    }
+    return position - delta;
+  }
+  return text.slice(sourceOffset(start, false), sourceOffset(start + selection.length, true));
 }
 
 // US units with a plural form. Others (tsp, tbsp, oz, fl oz) stay the same in the plural.
