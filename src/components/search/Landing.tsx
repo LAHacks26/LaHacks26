@@ -1,12 +1,21 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Chip } from "@/components/saffron";
 import { isRecipeUrl } from "@/lib/mocks/search";
 import { ConstraintChips } from "./ConstraintChips";
 import { SearchBox } from "./SearchBox";
 import "./search.css";
+
+/** Reads `?q=` once it changes and hands it up to fill the search box. Rendered inside a Suspense boundary. */
+function QueryPrefill({ onPrefill }: { onPrefill: (query: string) => void }) {
+  const q = useSearchParams().get("q");
+  useEffect(() => {
+    if (q?.trim()) onPrefill(q.trim());
+  }, [q, onPrefill]);
+  return null;
+}
 
 const EXAMPLES = [
   "butter chicken",
@@ -65,6 +74,7 @@ export function Landing() {
   const [statusIndex, setStatusIndex] = useState(0);
   const importAbort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const prefill = useCallback((value: string) => setQuery(value), []);
 
   // Abort a running import when the user leaves the page.
   useEffect(() => {
@@ -156,6 +166,9 @@ export function Landing() {
 
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 py-16 text-center sm:py-24">
+      <Suspense fallback={null}>
+        <QueryPrefill onPrefill={prefill} />
+      </Suspense>
       <div className="flex flex-col items-center gap-3">
         <h1
           className="search-hero-enter font-display text-[2rem] leading-tight font-semibold tracking-tight text-ink sm:text-[2.75rem]"

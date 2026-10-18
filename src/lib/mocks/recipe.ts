@@ -101,6 +101,7 @@ export const recipeMockStates: Record<
         mode: "explain",
         label: "“until charred”",
         explanation: UNTIL_CHARRED_EXPLANATION,
+        saved: true,
       },
       openTipIds: ["t1"],
     },

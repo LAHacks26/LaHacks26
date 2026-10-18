@@ -8,7 +8,12 @@ import { ApplianceChips } from "./ApplianceChips";
 import { AskSaffronFab } from "./AskSaffronFab";
 import { EditToast } from "./EditToast";
 import { formatIngredient, IngredientList } from "./IngredientList";
-import { LinePopover, type PopoverMode } from "./LinePopover";
+import {
+  LinePopover,
+  type PopoverAction,
+  type PopoverMode,
+  type SelectionAnchor,
+} from "./LinePopover";
 import { RecipeHeader } from "./RecipeHeader";
 import { type ReadyBy, StatsStrip } from "./StatsStrip";
 import { StepList } from "./StepList";
@@ -31,13 +36,23 @@ export type ActiveLine = {
   mode: PopoverMode;
   /** Overrides the header label. */
   label?: string;
+  /** The user's typed question, shown as a quote. */
   question?: string;
   suggestions?: string[];
+  suggestionsLoading?: boolean;
+  suggestionsError?: string;
   explanation?: string;
+  saved?: boolean;
   rejection?: { reason: string; suggestions: string[] };
   impossible?: { reason: string; suggestedSearch: string };
+  error?: string;
   loadingText?: string;
+  /** The phrase this popover was opened for, if any (PRD §5.4). */
+  selectedText?: string;
+  selection?: SelectionAnchor;
 };
+
+export type LineTarget = { kind: LineKind; id: string };
 
 export type RecipeViewProps = {
   recipe: Recipe;
@@ -49,20 +64,38 @@ export type RecipeViewProps = {
   readyBy?: ReadyBy;
   /** Shared view: no popovers, no chat button, no edit toast. */
   readOnly?: boolean;
-  /** Forces the popover open on one line (used by the mock states). */
+  /**
+   * The open popover. When `onOpenLine` is set, RecipeView is controlled: the parent owns this
+   * state. When it is not set (mock pages), RecipeView keeps the state itself, starting from this value.
+   */
   active?: ActiveLine | null;
+  /** A line was clicked and should open its popover. */
+  onOpenLine?: (kind: LineKind, id: string) => void;
+  /** The open popover should close. */
+  onCloseLine?: () => void;
+  /** A quick action, chip, ask field submit or retry inside the open popover. */
+  onAction?: (action: PopoverAction) => void;
+  /** True while a phrase selection is opening its popover. Read at click time, so it is a function. */
+  isPhraseGesture?: () => boolean;
+  /** The line an edit is running on. It shimmers. */
+  editingTarget?: LineTarget | null;
+  /** An edit is running: other edit actions are disabled. */
+  editBusy?: boolean;
   /** Phrase highlighted inside a step. */
   highlight?: { stepId: string; text: string };
   glowIds?: string[];
+  /** Changes on every edit, so the same lines glow again. */
+  glowKey?: number;
   /** How long the glow lasts, in milliseconds. Defaults to 2000. */
   glowMs?: number;
   /** Tip IDs that start expanded. */
   openTipIds?: string[];
   /** Undo toast after an edit. */
   toast?: { summary: string; linesChanged: number };
+  onUndo?: () => void;
 };
 
-/** A live click: a step opens idle (quick actions only); the other kinds open with suggestions. */
+/** A live click in mock mode: a step opens idle (quick actions only); the other kinds open with suggestions. */
 function defaultActive(recipe: Recipe, kind: LineKind, id: string): ActiveLine {
   if (kind === "step") {
     return { kind, id, mode: "idle" };
@@ -101,18 +134,28 @@ export function RecipeView({
   unit = "us",
   readyBy,
   readOnly = false,
-  active: initialActive = null,
+  active,
+  onOpenLine,
+  onCloseLine,
+  onAction,
+  isPhraseGesture,
+  editingTarget = null,
+  editBusy = false,
   highlight,
   glowIds = [],
+  glowKey,
   glowMs = 2000,
   openTipIds = [],
   toast,
+  onUndo,
 }: RecipeViewProps) {
-  const [active, setActive] = useState<ActiveLine | null>(initialActive);
+  const controlled = onOpenLine !== undefined;
+  const [localActive, setLocalActive] = useState<ActiveLine | null>(active ?? null);
+  const current = controlled ? (active ?? null) : localActive;
   const interactive = !readOnly;
 
   // Forced mock states: bring the target line (or the first glowing line) into view on mount.
-  const focusId = initialActive?.id ?? glowIds[0];
+  const [focusId] = useState(() => (controlled ? undefined : (active?.id ?? glowIds[0])));
   useEffect(() => {
     if (!focusId) return;
     const target = document.querySelector<HTMLElement>(`[data-line-id="${focusId}"]`);
@@ -121,25 +164,39 @@ export function RecipeView({
 
   function renderLine(kind: LineKind) {
     return function lineWithPopover(id: string, row: ReactElement) {
-      const current = active && active.kind === kind && active.id === id ? active : null;
+      const line = current && current.kind === kind && current.id === id ? current : null;
       return (
         <LinePopover
           kind={kind}
-          label={current?.label ?? lineLabel(recipe, kind, id, highlight)}
-          mode={current?.mode ?? "idle"}
-          open={current !== null}
-          onOpenChange={(next) =>
-            setActive((prev) => {
-              if (next) return defaultActive(recipe, kind, id);
-              return prev && prev.kind === kind && prev.id === id ? null : prev;
-            })
-          }
-          question={current?.question}
-          suggestions={current?.suggestions}
-          explanation={current?.explanation}
-          rejection={current?.rejection}
-          impossible={current?.impossible}
-          loadingText={current?.loadingText}
+          label={line?.label ?? lineLabel(recipe, kind, id, highlight)}
+          mode={line?.mode ?? "idle"}
+          open={line !== null}
+          onOpenChange={(next, reason) => {
+            // A phrase popover owns its line: the click that follows a phrase selection must not toggle
+            // it, and a click on the open phrase's own row leaves it alone. Keyboard opens are not
+            // trigger-press gestures during a phrase selection, so Enter and Space always open a line.
+            if (reason === "trigger-press" && (line?.selectedText || isPhraseGesture?.())) return;
+            if (next) {
+              if (controlled) onOpenLine?.(kind, id);
+              else setLocalActive(defaultActive(recipe, kind, id));
+            } else if (line) {
+              if (controlled) onCloseLine?.();
+              else setLocalActive(null);
+            }
+          }}
+          question={line?.question}
+          suggestions={line?.suggestions}
+          suggestionsLoading={line?.suggestionsLoading}
+          suggestionsError={line?.suggestionsError}
+          explanation={line?.explanation}
+          saved={line?.saved}
+          rejection={line?.rejection}
+          impossible={line?.impossible}
+          error={line?.error}
+          loadingText={line?.loadingText}
+          selection={line?.selection}
+          editBusy={editBusy}
+          onAction={onAction}
         >
           {row}
         </LinePopover>
@@ -148,7 +205,9 @@ export function RecipeView({
   }
 
   const selectedId = (kind: LineKind) =>
-    active && active.kind === kind ? active.id : undefined;
+    current && current.kind === kind ? current.id : undefined;
+  const editingId = (kind: LineKind) =>
+    editingTarget && editingTarget.kind === kind ? editingTarget.id : undefined;
 
   const glowStyle = { "--glow-duration": `${glowMs}ms` } as CSSProperties;
 
@@ -169,6 +228,8 @@ export function RecipeView({
             allergies={allergies}
             selectedId={selectedId("ingredient")}
             glowIds={glowIds}
+            glowKey={glowKey}
+            editingId={editingId("ingredient")}
             openTipIds={openTipIds}
             renderLine={interactive ? renderLine("ingredient") : undefined}
           />
@@ -181,6 +242,9 @@ export function RecipeView({
               <ApplianceChips
                 appliances={recipe.appliances}
                 selectedId={selectedId("appliance")}
+                glowIds={glowIds}
+                glowKey={glowKey}
+                editingId={editingId("appliance")}
                 openTipIds={openTipIds}
                 renderLine={interactive ? renderLine("appliance") : undefined}
               />
@@ -194,7 +258,9 @@ export function RecipeView({
             steps={recipe.steps}
             highlight={highlight}
             glowIds={glowIds}
+            glowKey={glowKey}
             selectedId={selectedId("step")}
+            editingId={editingId("step")}
             openTipIds={openTipIds}
             renderLine={interactive ? renderLine("step") : undefined}
           />
@@ -203,7 +269,11 @@ export function RecipeView({
 
       {interactive ? <AskSaffronFab /> : null}
       {interactive && toast ? (
-        <EditToast summary={toast.summary} linesChanged={toast.linesChanged} />
+        <EditToast
+          summary={toast.summary}
+          linesChanged={toast.linesChanged}
+          onUndo={onUndo}
+        />
       ) : null}
     </>
   );
