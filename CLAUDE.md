@@ -1,6 +1,6 @@
 # Saffron (LA Hacks 2026)
 
-A recipe browser: a Browser Use agent finds recipes, Gemini rewrites them into a clean layout, and every line can be clicked to ask about it, substitute it or adapt it. The spec is `docs/PRD.md`; it is the source of truth.
+A recipe browser: a Browser Use agent finds recipes, Gemini rewrites them into a clean layout, and every line can be clicked to ask about it, substitute it or adapt it. The spec is `docs/PRD.md`; it is the source of truth. Current progress and the next tasks are in `docs/HANDOFF.md`; update it when you finish a task.
 Update this file after every mistake an agent makes so it doesn't repeat.
 
 ## Stack
