@@ -185,7 +185,9 @@ Stretch items → unit toggle → per-step clock times → chat persistence in t
 | Query parsing | Flash | < 1.5s |
 | Embeddings | `gemini-embedding-001`, `outputDimensionality: 768` | — |
 
-Use the latest Flash and Pro model IDs listed in AI Studio when building (`GEMINI_FAST_MODEL`, `GEMINI_SMART_MODEL`). Use the `@google/genai` SDK with structured output (`responseMimeType: application/json` plus a JSON schema generated from zod).
+**Chosen models (tested 2026-10-17 with our key):** `GEMINI_FAST_MODEL=gemini-3.6-flash` (about 1.2s for a tiny reply) and `GEMINI_SMART_MODEL=gemini-3.6-flash` with a higher `thinkingLevel`. On a 429 or 503, retry once on `GEMINI_FALLBACK_MODEL=gemini-3.5-flash`. Why: the newest Flash models were overloaded (3.8 took ~60–90s, 3.7 returned 503 "high demand"), Pro models return 429 (no quota on a free key), and 2.5 models are retired. If billing is enabled later, switch `GEMINI_SMART_MODEL` to a Pro model. Set `thinkingConfig.thinkingLevel` per call: `low` for popover actions, higher for transforms and normalization ("minimal" is not supported on these models).
+
+Use the `@google/genai` SDK with structured output (`responseMimeType: application/json` plus a JSON schema generated from zod with `z.toJSONSchema`). `gemini-embedding-001` with `outputDimensionality: 768` was verified to return 768 values.
 
 ### 6.2 System rules (shared preamble for every call)
 - **Persona:** calm, concise sous-chef. 1–3 sentences in chat, 1–2 in voice. Warm but not chatty, confident about technique.
@@ -436,8 +438,9 @@ Questions ("what does fold mean?") are answered by the agent's LLM directly from
 ## 13. Environment variables (`.env.example`)
 ```
 GEMINI_API_KEY=
-GEMINI_FAST_MODEL=          # latest Flash ID from AI Studio
-GEMINI_SMART_MODEL=         # latest Pro ID from AI Studio
+GEMINI_FAST_MODEL=gemini-3.6-flash
+GEMINI_SMART_MODEL=gemini-3.6-flash
+GEMINI_FALLBACK_MODEL=gemini-3.5-flash
 GEMINI_EMBED_MODEL=gemini-embedding-001
 DATABASE_URL=               # Tiger Cloud connection string
 BROWSER_USE_API_KEY=

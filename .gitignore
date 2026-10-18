@@ -1,7 +1,7 @@
 node_modules/
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 dist/
 build/
 .next/
@@ -11,3 +11,9 @@ Thumbs.db
 *.log
 .claude/settings.local.json
 .claude/worktrees/
+
+# Next.js
+/out/
+/coverage/
+*.tsbuildinfo
+next-env.d.ts
