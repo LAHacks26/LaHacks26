@@ -59,21 +59,40 @@ export function buildAgentPrompt(dishQuery: string, constraints: string[], maxTo
 // per site in parallel, each starting on that site's search results and opening its best match.
 // The slowest finished in 25–34 s, and each candidate URL is the page the browser actually loaded,
 // taken from the step log rather than from the model's text.
+//
+// Later the same day, obscure dishes ("hong kong dan ta", "khao soi") found nothing on those sites,
+// and one agent hung for 151 s without taking a step, holding the whole search until it failed. So a
+// fourth agent searches the open web (DuckDuckGo; Google answers bots with a captcha), and a run
+// finishes early: at 3 recipes, after SOFT_DEADLINE_MS if anything was found, or at HARD_DEADLINE_MS.
 
 type Site = {
   name: string;
-  host: string;
+  /** The site's host. Null for the open-web agent: any host except search engines and social sites. */
+  host: string | null;
   searchUrl: (dish: string) => string;
   /** Paths of single-recipe pages. Roundups ("mango-recipes-5117647") and other pages don't match. */
   recipePath: RegExp;
 };
 
-/** Allowlisted sites whose search pages work in the agent and whose recipes our server can fetch. */
+/** Allowlisted sites whose search pages work in the agent and whose recipes our server can fetch, then the open web. */
 export const AGENT_SITES: Site[] = [
   { name: "AllRecipes", host: "allrecipes.com", searchUrl: (dish) => `https://www.allrecipes.com/search?q=${encodeURIComponent(dish)}`, recipePath: /^\/recipe\/\d+\// },
   { name: "BBC Good Food", host: "bbcgoodfood.com", searchUrl: (dish) => `https://www.bbcgoodfood.com/search?q=${encodeURIComponent(dish)}`, recipePath: /^\/recipes\/[^/]+\/?$/ },
   { name: "Serious Eats", host: "seriouseats.com", searchUrl: (dish) => `https://www.seriouseats.com/search?q=${encodeURIComponent(dish)}`, recipePath: /-recipe(?:-\d+)?\/?$/ },
+  // Blog recipe URLs end in a slug ("/kao-soi/", "/chinese-egg-tarts.html") or say "recipe"; "/category/asian/" doesn't.
+  { name: "the web", host: null, searchUrl: (dish) => `https://duckduckgo.com/?q=${encodeURIComponent(`${dish} recipe`)}`, recipePath: /recipe|\/[^/]*[a-z0-9][-_][a-z0-9][^/]*\/?$/i },
 ];
+
+/** Hosts the open-web agent's pick can't come from: search engines, video, social and shopping sites. */
+const NOT_RECIPE_HOSTS =
+  /(^|\.)(duckduckgo\.com|bing\.com|google\.[a-z.]+|yahoo\.[a-z.]+|search\.brave\.com|ecosia\.org|startpage\.com|yandex\.[a-z.]+|youtube\.com|youtu\.be|pinterest\.[a-z.]+|reddit\.com|facebook\.com|instagram\.com|tiktok\.com|x\.com|twitter\.com|t\.co|tumblr\.com|amazon\.[a-z.]+)$/;
+
+/** Stop waiting once this many recipes are in (runSearch shows 3). */
+const ENOUGH_CANDIDATES = 3;
+/** After this, finish with whatever was found, including recipe pages a still-running agent has opened. */
+const SOFT_DEADLINE_MS = 45_000;
+/** After this, finish even with nothing. runSearch's own 150 s limit would fail the whole search. */
+const HARD_DEADLINE_MS = 75_000;
 
 const API_BASE = "https://api.browser-use.com/api/v2";
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -92,7 +111,8 @@ const TITLE_JSON_SCHEMA = JSON.stringify({
 });
 
 const SITE_NAMES: Record<string, string> = Object.fromEntries([
-  ...AGENT_SITES.map((site) => [site.host, site.name]),
+  ...AGENT_SITES.flatMap((site) => (site.host ? [[site.host, site.name]] : [])),
+  ["duckduckgo.com", "the web"],
   ["budgetbytes.com", "Budget Bytes"],
   ["simplyrecipes.com", "Simply Recipes"],
   ["foodnetwork.com", "Food Network"],
@@ -108,12 +128,18 @@ const TaskViewSchema = z.object({
 const SessionViewSchema = z.object({ liveUrl: z.string().nullish() });
 const TitleSchema = z.object({ title: z.string() });
 
-/** One site agent's task: open the search result that best matches the dish, then stop. */
-export function buildSitePrompt(site: string, opts: Pick<StartOptions, "dishQuery" | "constraints" | "maxTotalMin">): string {
-  const lines = [
-    `You are on ${site}'s search results for ${JSON.stringify(opts.dishQuery)}.`,
-    "Click the result that best matches the dish. It must be one single recipe, not a list, a roundup, a video or a collection.",
-  ];
+/** One agent's task: open the search result that best matches the dish, then stop. `site` null = the open web. */
+export function buildSitePrompt(site: string | null, opts: Pick<StartOptions, "dishQuery" | "constraints" | "maxTotalMin">): string {
+  const lines = site
+    ? [
+        `You are on ${site}'s search results for ${JSON.stringify(opts.dishQuery)}.`,
+        "Click the result that best matches the dish. It must be one single recipe, not a list, a roundup, a video or a collection.",
+      ]
+    : [
+        `You are on web search results for ${JSON.stringify(`${opts.dishQuery} recipe`)}.`,
+        "Click the result that is one single recipe for this dish on a recipe website or food blog. Not a video, a list or roundup, Pinterest, Reddit, a forum or a shop.",
+        "Prefer a site other than AllRecipes, BBC Good Food and Serious Eats; other agents search those.",
+      ];
   if (opts.constraints.length > 0) {
     lines.push(`It must meet every limit: ${opts.constraints.join(", ")}. For example, "Dairy-free" means no butter, milk, cheese or cream, and "No oven" means no baking.`);
   }
@@ -133,7 +159,8 @@ function hostOf(url: string | null | undefined): string | null {
   }
 }
 
-const isSearchPage = (url: URL) => /search/i.test(url.pathname) || url.searchParams.has("q");
+/** "/search?q=…" or any "?q=…". Not a slug that merely contains "search" ("/research-kitchen-pancakes/"). */
+const isSearchPage = (url: URL) => /\/search(\/|\.|$)/i.test(url.pathname) || url.searchParams.has("q");
 
 /** "Searching AllRecipes…" or "Reading Serious Eats: thai coconut sticky rice mango…" from a step's page. */
 export function describeStep(step: { nextGoal?: string | null; url?: string | null }): string {
@@ -163,17 +190,20 @@ export function describeStep(step: { nextGoal?: string | null; url?: string | nu
 export function candidateFromRun(
   site: Pick<Site, "host" | "recipePath">,
   view: { output?: string | null; steps: { url?: string | null }[] },
+  /** Only pages shaped like a single recipe. For agents still running: a category page isn't a find yet. */
+  strict = false,
 ): AgentCandidate | null {
   let recipe: string | null = null;
   let other: string | null = null;
   for (const step of view.steps) {
-    if (hostOf(step.url) !== site.host) continue;
+    const host = hostOf(step.url);
+    if (!host || (site.host ? host !== site.host : NOT_RECIPE_HOSTS.test(host))) continue;
     const parsed = new URL(step.url!);
     if (isSearchPage(parsed) || parsed.pathname.length <= 1) continue;
     if (site.recipePath.test(parsed.pathname)) recipe = parsed.toString();
     else other = parsed.toString();
   }
-  const url = recipe ?? other;
+  const url = strict ? recipe : (recipe ?? other);
   if (!url) return null;
 
   let title: string | null = null;
@@ -195,9 +225,11 @@ type SiteTask = {
   logged: number;
   errors: number;
   candidate: AgentCandidate | null;
+  /** A recipe page this agent has loaded while still running. Used if the run stops waiting for it. */
+  partial: AgentCandidate | null;
 };
 
-type SiteRun = { tasks: SiteTask[]; log: string[] };
+type SiteRun = { tasks: SiteTask[]; log: string[]; startedAt: number };
 
 /** Browser Use Cloud API v2 (docs.browser-use.com/cloud/api-v2-overview). One run = one agent per site. */
 export class BrowserUseCloudClient implements BrowserUseClient {
@@ -206,6 +238,7 @@ export class BrowserUseCloudClient implements BrowserUseClient {
   constructor(
     private readonly apiKey: string,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly now: () => number = Date.now,
   ) {}
 
   /** `prompt` is the single-agent prompt for the mock; the site agents get buildSitePrompt instead. */
@@ -215,7 +248,7 @@ export class BrowserUseCloudClient implements BrowserUseClient {
         try {
           const created = z.object({ id: z.string(), sessionId: z.string() }).parse(
             await this.request("POST", "/tasks", {
-              task: buildSitePrompt(site.name, opts),
+              task: buildSitePrompt(site.host ? site.name : null, opts),
               llm: AGENT_LLM,
               maxSteps: SITE_MAX_STEPS,
               flashMode: true,
@@ -223,7 +256,7 @@ export class BrowserUseCloudClient implements BrowserUseClient {
               structuredOutput: TITLE_JSON_SCHEMA,
             }),
           );
-          return { site, taskId: created.id, sessionId: created.sessionId, done: false, logged: 0, errors: 0, candidate: null };
+          return { site, taskId: created.id, sessionId: created.sessionId, done: false, logged: 0, errors: 0, candidate: null, partial: null };
         } catch {
           // One site failing to start (e.g. the concurrency limit) still leaves the others.
           return null;
@@ -236,7 +269,7 @@ export class BrowserUseCloudClient implements BrowserUseClient {
     const runId = randomUUID();
     const names = tasks.map((task) => task.site.name);
     const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
-    this.runs.set(runId, { tasks, log: [`Sending agents to ${list}…`] });
+    this.runs.set(runId, { tasks, log: [`Sending agents to ${list}…`], startedAt: this.now() });
     // The page shows one live view: the first site's browser.
     return { taskId: runId, liveUrl: await this.liveUrl(tasks[0]!.sessionId) };
   }
@@ -245,11 +278,36 @@ export class BrowserUseCloudClient implements BrowserUseClient {
     const run = this.runs.get(runId);
     if (!run) throw new Error("Unknown Browser Use run");
     await Promise.all(run.tasks.filter((task) => !task.done).map((task) => this.pollTask(run, task)));
-    if (run.tasks.some((task) => !task.done)) return { status: "running", steps: [...run.log] };
+
+    const unfinished = run.tasks.filter((task) => !task.done);
+    // Distinct URLs: the web agent can land on the same page as a site agent, and runSearch dedupes them.
+    const foundUrls = new Set(run.tasks.flatMap((task) => (task.candidate ? [task.candidate.url] : [])));
+    const found = foundUrls.size;
+    const cut: SiteTask[] = [];
+    if (unfinished.length > 0) {
+      // One slow or hung agent must not hold up (or, at runSearch's 150 s limit, fail) the whole search.
+      const elapsed = this.now() - run.startedAt;
+      const withPartials = new Set([...foundUrls, ...unfinished.flatMap((task) => (task.partial ? [task.partial.url] : []))]);
+      const stopWaiting =
+        found >= ENOUGH_CANDIDATES ||
+        elapsed >= HARD_DEADLINE_MS ||
+        (elapsed >= SOFT_DEADLINE_MS && withPartials.size > 0);
+      if (!stopWaiting) return { status: "running", steps: [...run.log] };
+      for (const task of unfinished) {
+        task.done = true;
+        cut.push(task);
+        void this.request("PATCH", `/tasks/${encodeURIComponent(task.taskId)}`, { action: "stop_task_and_session" }).catch(() => undefined);
+      }
+      if (found < ENOUGH_CANDIDATES) run.log.push("Wrapping up with the recipes found so far…");
+    }
 
     this.runs.delete(runId);
     this.stopSession(run.tasks[0]!);
-    const candidates = run.tasks.flatMap((task) => (task.candidate ? [task.candidate] : []));
+    // Finished agents' picks first, then pages that stopped agents had already opened.
+    const candidates = [
+      ...run.tasks.flatMap((task) => (task.candidate ? [task.candidate] : [])),
+      ...cut.flatMap((task) => (task.partial ? [task.partial] : [])),
+    ];
     return { status: "finished", steps: [...run.log], candidates };
   }
 
@@ -282,7 +340,10 @@ export class BrowserUseCloudClient implements BrowserUseClient {
     run.log.push(...described.slice(task.logged));
     task.logged = Math.max(task.logged, described.length);
 
-    if (view.status === "created" || view.status === "started") return;
+    if (view.status === "created" || view.status === "started") {
+      task.partial = candidateFromRun(task.site, { output: null, steps: view.steps }, true);
+      return;
+    }
     this.finishTask(task, view.status === "finished" ? candidateFromRun(task.site, view) : null, task === run.tasks[0]);
   }
 

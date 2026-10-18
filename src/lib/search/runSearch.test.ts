@@ -302,22 +302,22 @@ describe("runSearch: one active run per session", () => {
 });
 
 describe("runSearch: concurrency", () => {
-  it("runs at most three agents at once and queues the rest", async () => {
+  it("runs at most two searches' agents at once and queues the rest", async () => {
     const agent = makeAgent("hang");
     vi.mocked(getBrowserUseClient).mockReturnValue(agent.client);
 
-    const runs = ["q-1", "q-2", "q-3", "q-4"].map((session) => startRun(session));
+    const runs = ["q-1", "q-2", "q-3"].map((session) => startRun(session));
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(agent.raw.start).toHaveBeenCalledTimes(3);
-    const queued = runs[3];
+    expect(agent.raw.start).toHaveBeenCalledTimes(2);
+    const queued = runs[2];
     expect(queued.events).toContainEqual({ type: "agent_step", text: "Waiting for a free agent…" });
     expect(types(queued.events)).not.toContain("agent_started");
 
     agent.finishTask(agent.taskIds()[0]);
     await vi.advanceTimersByTimeAsync(5_000);
 
-    expect(agent.raw.start).toHaveBeenCalledTimes(4);
+    expect(agent.raw.start).toHaveBeenCalledTimes(3);
     expect(types(queued.events)).toContain("agent_started");
     expect(types(runs[0].events).at(-1)).toBe("done");
 
