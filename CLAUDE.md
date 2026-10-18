@@ -12,6 +12,7 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - **Gemini** via `@google/genai`. **Browser Use Cloud** and **ElevenLabs** are stubbed until their keys arrive (PRD §13.1).
 - **Auth.js v5** (Google), added in phase 5.
 - **Tests:** vitest. **Hosting:** Vultr VM with pm2 and Caddy. The build needs dev dependencies (Tailwind, shadcn CSS), so deploys run a full `npm ci`, never `--omit=dev`.
+- **No CSS modules.** `next.config.ts` routes every `*.css` file through `@tailwindcss/turbopack` as global CSS, so `*.module.css` class imports are `undefined` and fail silently. Use Tailwind classes, or a plain `.css` file with prefixed class names (e.g. `.recipe-glow`) imported once by a client component.
 - **Next.js 16.4 differs from most training data.** Read the relevant guide in `node_modules/next/dist/docs/` before using an unfamiliar Next API (see `AGENTS.md`). Cache Components is deliberately OFF in `next.config.ts`; do not turn it on.
 
 ## Commands
@@ -36,6 +37,8 @@ Copy `.env.example` to `.env.local` and fill it in. Never commit any `.env*` fil
 - Give each subagent exact file paths, the goal, and success criteria — it starts with no context.
 - Run parallel agents only on disjoint files (frontend / backend / db). 3–5 at once max.
 - For isolation use worktrees; worktrees don't share `.env` or `node_modules`, so copy the env file and run install in each. Merge branches one at a time.
+- Agent worktrees (`isolation: "worktree"`) start from `main`, NOT from your current branch. Before spawning them, make sure everything they depend on is on `main`, or merge your branch into each worktree (`git -C <worktree> merge <branch>`) right after spawning. Otherwise builders recreate missing shared files.
+- Parallel builders must not run `next build` or `next dev` in the same folder; they clobber `.next`. Use separate worktrees, or have only one agent build at a time.
 
 ## Git rules
 - Commit after each working sub-task.
