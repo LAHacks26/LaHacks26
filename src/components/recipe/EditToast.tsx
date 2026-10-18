@@ -18,7 +18,10 @@ export function EditToast({ summary, linesChanged, onUndo, className }: EditToas
       )}
     >
       <p className="min-w-0">
-        {summary} · {linesChanged} {linesChanged === 1 ? "line" : "lines"} changed
+        {summary}
+        {linesChanged > 0
+          ? ` · ${linesChanged} ${linesChanged === 1 ? "line" : "lines"} changed`
+          : null}
       </p>
       <button
         type="button"

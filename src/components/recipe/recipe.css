@@ -24,6 +24,28 @@
   }
 }
 
+/* The line an edit is running on: a slow saffron pulse until the edit ends. */
+.recipe-editing {
+  animation: recipe-editing-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes recipe-editing-pulse {
+  0%,
+  100% {
+    background-color: color-mix(in oklab, var(--saffron-soft) 35%, transparent);
+  }
+  50% {
+    background-color: var(--saffron-soft);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-editing {
+    animation: none;
+    background-color: var(--saffron-soft);
+  }
+}
+
 /* Undo toast: slides up from below over 400ms with the keyword `ease`, a softer
    curve like Sonner. @starting-style supplies the hidden state for the first frame,
    so the transition runs on mount. Reduced motion keeps the opacity fade only. */

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { RecipeView } from "@/components/recipe";
+import { RecipeEditor } from "@/components/recipe";
 import { AppHeader } from "@/components/shell/AppHeader";
 import { getSourceRecipe } from "@/lib/db/sourceRecipes";
 import { type Recipe, RecipeSchema } from "@/lib/recipe/schema";
@@ -46,7 +46,7 @@ export default async function RecipePage({ params }: RecipePageProps) {
     <div className="flex min-h-dvh flex-1 flex-col">
       <AppHeader />
       <main className="flex-1">
-        <RecipeView recipe={recipe} />
+        <RecipeEditor sourceRecipeId={sourceId} recipe={recipe} />
       </main>
     </div>
   );

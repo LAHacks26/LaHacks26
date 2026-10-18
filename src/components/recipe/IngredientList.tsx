@@ -49,6 +49,10 @@ export type IngredientListProps = {
   allergies: string[];
   selectedId?: string;
   glowIds?: string[];
+  /** Changes on every edit, so the same rows glow again. */
+  glowKey?: number;
+  /** The row an edit is running on. It shimmers. */
+  editingId?: string;
   /** Tip IDs that start expanded. */
   openTipIds?: string[];
   onSelect?: (id: string) => void;
@@ -79,6 +83,8 @@ export function IngredientList({
   allergies,
   selectedId,
   glowIds = [],
+  glowKey,
+  editingId,
   openTipIds = [],
   onSelect,
   renderLine,
@@ -99,14 +105,15 @@ export function IngredientList({
             {group.items.map((ingredient) => {
               const selected = ingredient.id === selectedId;
               const glow = glowing.has(ingredient.id);
+              const editing = ingredient.id === editingId;
               const matches = matchingAllergens(ingredient, allergies);
               const className = cn(
-                "flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base leading-snug text-foreground",
+                "relative isolate flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base leading-snug text-foreground",
                 interactive
                   ? "cursor-pointer outline-none transition-[background-color] duration-150 ease-out hover:bg-saffron-soft/50 focus-visible:ring-3 focus-visible:ring-ring/50"
                   : "cursor-default",
                 selected && "bg-saffron-soft ring-2 ring-saffron",
-                glow && "recipe-glow"
+                editing && "recipe-editing"
               );
               const content = (
                 <>
@@ -132,6 +139,14 @@ export function IngredientList({
                       </span>
                     ) : null}
                   </span>
+                  {/* Keyed by glowKey, so a new edit restarts the fade even on the same rows. */}
+                  {glow ? (
+                    <span
+                      key={glowKey}
+                      aria-hidden="true"
+                      className="recipe-glow pointer-events-none absolute inset-0 -z-10 rounded-lg"
+                    />
+                  ) : null}
                 </>
               );
               const row = interactive ? (

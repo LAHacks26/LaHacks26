@@ -9,6 +9,10 @@ export type StepListProps = {
   /** Phrase to highlight inside one step. */
   highlight?: { stepId: string; text: string };
   glowIds?: string[];
+  /** Changes on every edit, so the same steps glow again. */
+  glowKey?: number;
+  /** The step an edit is running on. It shimmers. */
+  editingId?: string;
   selectedId?: string;
   /** Tip IDs that start expanded. */
   openTipIds?: string[];
@@ -39,6 +43,8 @@ export function StepList({
   steps,
   highlight,
   glowIds = [],
+  glowKey,
+  editingId,
   selectedId,
   openTipIds = [],
   onSelect,
@@ -52,14 +58,15 @@ export function StepList({
       {steps.map((step, index) => {
         const selected = step.id === selectedId;
         const glow = glowing.has(step.id);
+        const editing = step.id === editingId;
         const phrase = highlight?.stepId === step.id ? highlight.text : undefined;
         const className = cn(
-          "flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base leading-relaxed text-foreground",
+          "relative isolate flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base leading-relaxed text-foreground select-text",
           interactive
             ? "cursor-pointer outline-none transition-[background-color] duration-150 ease-out hover:bg-saffron-soft/50 focus-visible:ring-3 focus-visible:ring-ring/50"
             : "cursor-default",
           selected && "bg-saffron-soft ring-2 ring-saffron",
-          glow && "recipe-glow"
+          editing && "recipe-editing"
         );
         const content = (
           <>
@@ -73,6 +80,14 @@ export function StepList({
               <span>{phrase ? withHighlight(step.text, phrase) : step.text}</span>
               {step.timer ? <TimerChip label={timerLabel(step.timer)} /> : null}
             </span>
+            {/* Keyed by glowKey, so a new edit restarts the fade even on the same steps. */}
+            {glow ? (
+              <span
+                key={glowKey}
+                aria-hidden="true"
+                className="recipe-glow pointer-events-none absolute inset-0 -z-10 rounded-lg"
+              />
+            ) : null}
           </>
         );
         const row = interactive ? (
