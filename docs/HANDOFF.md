@@ -9,13 +9,24 @@ Written 2026-10-18 for any coding agent (Codex, Claude Code, etc.) picking up th
 | 0 Scaffold, schema, DB, deploy skeleton | Done | `main` |
 | UI mocks (`/mocks/*`) | Done | `main` |
 | 1 URL import → recipe page | **Done, tested end to end** | `main` |
-| 2 Hero: click a line → ask → recipe edits itself | **In progress** (see §3) | `david/phase-2`, `david/phase-2-ai-wip` |
-| 3–8 Chat, search, auth/save/share, cook mode + voice, scaler/units/schedule, deploy + demo | Not started | — |
+| 2 Hero: click a line → ask → recipe edits itself | **In progress.** Patch engine, store and AI routes are merged; UI wiring is underway (Task B) | `david/phase-2` |
+| 3 Chat | Contract only (`ChatRequestSchema` in `src/lib/ai/contracts.ts`) | `david/phase-2` |
+| 4 Search | Contract (`src/lib/search/types.ts`); server and page are being built | `david/phase-2` |
+| 5 Auth / save / share | Not started. No Google OAuth credentials yet (see §3) | — |
+| 6 Cook mode + voice | Contracts only (`src/lib/voice/types.ts`, `src/lib/store/cookStore.ts` stub) | `david/phase-2` |
+| 7 Scaler / units / schedule | Pure functions being built | — |
+| 8 Deploy + demo | Not started | — |
 
 **Branches on GitHub**
 - `main`: Phase 1 merged. Builds and works.
-- `david/phase-2`: **continue from here.** It has the Phase 2 contracts, the patch engine and the working-copy store (reviewed, 204 tests).
-- `david/phase-2-ai-wip`: AI routes for Phase 2. Unmerged, because the review found problems. `REVIEW-TODO.md` at its root lists the required fixes.
+- `david/phase-2`: **continue from here.** It holds:
+  - the contracts for phases 2, 3, 4 and 6;
+  - the patch engine and the working-copy store;
+  - the AI routes (`/api/ai/edit`, `/api/ai/explain`, `/api/ai/suggest-swaps`), reviewed twice.
+
+  300 tests pass.
+
+Work in progress lives in agent worktrees under `.claude/worktrees/` on David's laptop until it is reviewed and merged, so it is not on GitHub yet.
 
 **The live site** (https://96-30-204-210.sslip.io) still runs the old mocks-only build. Phase 1 has not been deployed. See §6.
 
@@ -44,15 +55,14 @@ Written 2026-10-18 for any coding agent (Codex, Claude Code, etc.) picking up th
 
 ## 3. Next tasks, in order
 
-### Task A: fix and merge the AI routes
-1. `git switch david/phase-2-ai-wip`. Apply every item in `REVIEW-TODO.md`. The two **High** items are the most important:
-   - The allergen filter rejects "dairy-free butter" for a dairy allergy.
-   - Scraped text reaches the prompt without the untrusted-data fence.
-2. Delete `REVIEW-TODO.md`. Run the full check suite. Have a second agent or a person review the diff.
-3. Merge into `david/phase-2`.
-4. Make **one** live call: substitute heavy cream → coconut milk on the butter chicken recipe, through `POST /api/ai/edit`. This checks Gemini's output against the real patch engine; the earlier smoke test ran with `patch.ts` stubbed.
+### Task A: AI routes (DONE, merged into `david/phase-2`)
+Both rounds of review fixes are applied: allergen "-free" handling, the untrusted fence, explain-stream errors, the Caddy streaming block, 400s before calling Gemini, and a total deadline.
 
-**What the branch contains:**
+Still open:
+- A follow-up adding allergen synonyms ("butter" → dairy, "almond" → tree nuts, and so on) is in progress.
+- Make **one** live call: substitute heavy cream → coconut milk on the butter chicken recipe, through `POST /api/ai/edit`. This checks Gemini's output against the real patch engine; the earlier smoke test ran with `patch.ts` stubbed.
+
+**What was merged:**
 - `src/lib/ai/edit.ts`: `runEdit`. Gemini fills a flat op schema (`editSchema.ts`, because Gemini handles `oneOf` poorly), which is converted to `PatchOp`. Then `normalizePatchIds`, `validatePatch`, `applyEditResult`, with one retry carrying the error messages.
 - `explain.ts`: a streamed plain-text answer.
 - `swaps.ts`: exactly 3 allergen-safe swaps.
