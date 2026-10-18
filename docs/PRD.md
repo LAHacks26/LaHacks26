@@ -189,6 +189,8 @@ Stretch items → unit toggle → per-step clock times → chat persistence in t
 
 Use the `@google/genai` SDK with structured output (`responseMimeType: application/json` plus a JSON schema generated from zod with `z.toJSONSchema`). `gemini-embedding-001` with `outputDimensionality: 768` was verified to return 768 values.
 
+**JSON schema for Gemini (from the phase-0 review):** call `z.toJSONSchema(schema)` in the default (output) mode, so defaulted arrays become required and the model must emit them. Then recursively strip `$schema`, `default`, and the huge `maximum` that `.int()` adds before passing it as `responseJsonSchema`. `PatchOp` converts to `oneOf` + `const`, which Gemini may reject. Smoke-test one real call per schema before relying on it, and if `oneOf` fails, send Gemini a flattened op shape and convert it back on the server. Refinements are not in the JSON schema; server-side `parse` still enforces them.
+
 ### 6.2 System rules (shared preamble for every call)
 - **Persona:** calm, concise sous-chef. 1–3 sentences in chat, 1–2 in voice. Warm but not chatty, confident about technique.
 - **Food safety:** never lower safe internal temperatures (poultry 165°F/74°C, ground meat 160°F/71°C, whole cuts of pork, beef or fish 145°F/63°C). If a change adds risk (raw egg, raw flour, undercooking), state it.
