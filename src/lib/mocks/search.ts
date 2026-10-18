@@ -83,7 +83,20 @@ export const mockSearch = {
 
 /** A pasted link imports the page directly and skips the agent (PRD §5.1, §10.4). */
 export function isRecipeUrl(value: string): boolean {
-  return /^https?:\/\//i.test(value.trim());
+  return recipeUrlFrom(value) !== null;
+}
+
+/** A host with a dot and a TLD, then an optional port and path, with no spaces: "www.allrecipes.com/recipe/1/x". */
+const BARE_LINK = /^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?::\d+)?(?:[/?#]\S*)?$/i;
+
+/**
+ * The link to import when the box holds one, or null for a dish search. A pasted link usually has
+ * https://, but a typed one often doesn't ("allrecipes.com/recipe/…"), so that gets https:// added.
+ */
+export function recipeUrlFrom(value: string): string | null {
+  const text = value.trim();
+  if (/^https?:\/\//i.test(text)) return text;
+  return BARE_LINK.test(text) ? `https://${text}` : null;
 }
 
 /** "19:30" becomes "7:30 PM". Unparseable values are returned unchanged. */

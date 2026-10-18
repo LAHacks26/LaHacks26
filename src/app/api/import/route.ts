@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { AiError } from "@/lib/ai/gemini";
+import { DATABASE_UNAVAILABLE_MESSAGE, databaseUnavailableCode } from "@/lib/db/errors";
 import { IngestError } from "@/lib/ingest/fetchPage";
 import { importRecipe } from "@/lib/ingest/importRecipe";
 import { aiRateLimiter } from "@/lib/rateLimit";
@@ -84,6 +85,13 @@ function errorResponse(err: unknown): Response {
       default:
         break;
     }
+  }
+
+  // The link is fine; the database isn't reachable. Log the code only: the driver's message names the host.
+  const dbCode = databaseUnavailableCode(err);
+  if (dbCode) {
+    console.error("[import] database unavailable", dbCode);
+    return failure(503, DATABASE_UNAVAILABLE_MESSAGE);
   }
 
   console.error("[import] unexpected failure", err);
