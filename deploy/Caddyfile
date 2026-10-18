@@ -1,0 +1,14 @@
+# Installed as /etc/caddy/Caddyfile on the Vultr VM.
+# Stub hostname until the GoDaddy Registry domain exists (PRD 13.1); Caddy gets the HTTPS cert itself.
+96-30-204-210.sslip.io {
+	# Search progress is Server-Sent Events: no compression, flush every event immediately.
+	handle /api/search/*/stream {
+		reverse_proxy 127.0.0.1:3000 {
+			flush_interval -1
+		}
+	}
+	handle {
+		encode zstd gzip
+		reverse_proxy 127.0.0.1:3000
+	}
+}

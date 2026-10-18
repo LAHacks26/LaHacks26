@@ -19,6 +19,7 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
 - `npm run db:generate` writes SQL migrations to `drizzle/`. `npm run db:migrate` applies them and needs `DATABASE_URL` in `.env.local`.
 - Before reporting a task done, run: `npm run typecheck && npm run lint && npm test && npm run build`.
+- **Deploy** (Vultr VM, live at https://96-30-204-210.sslip.io): push the branch, then `ssh saffron 'sudo -iu saffron bash app/scripts/deploy.sh <branch>'` (default branch `main`). The `saffron` SSH alias and key are on David's laptop. Production env lives in `/home/saffron/app/.env.local` on the VM; update it with `scp`, never git. If you change `deploy/Caddyfile`, copy it to `/etc/caddy/Caddyfile` and run `systemctl reload caddy`. Don't deploy right before a demo: a failed build leaves the site degraded until the next good deploy.
 
 ## Env
 Copy `.env.example` to `.env.local` and fill it in. Never commit any `.env*` file except `.env.example`. When you add an env var, add it to `.env.example` in the same change.
