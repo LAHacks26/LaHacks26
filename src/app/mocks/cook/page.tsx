@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CookModeView, type WakeState } from "@/components/cook";
+import { CookModeDemo, type WakeState } from "@/components/cook";
 import { Chip } from "@/components/saffron";
 import { WAKE_PREVIEW_STATES, cookMock } from "@/lib/mocks/cook";
 
@@ -34,7 +34,7 @@ export default async function CookMockPage({ searchParams }: CookMockPageProps) 
         ))}
       </nav>
 
-      <CookModeView
+      <CookModeDemo
         key={active}
         recipe={cookMock.recipe}
         initialStepId={cookMock.initialStepId}

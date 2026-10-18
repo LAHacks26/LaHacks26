@@ -8,7 +8,7 @@ import type { SavedDocument } from "@/lib/saved/contracts";
 import { createSaveSession, type SaveState } from "./saveSession";
 import { clearSavedDraft } from "@/lib/store/savedDraft";
 
-type Props = { recipeKey: string; sourceRecipeId?: string; forkedFromSlug?: string; initial?: SavedDocument };
+type Props = { recipeKey: string; sourceRecipeId?: string; forkedFromSlug?: string; initial?: SavedDocument; onStartCooking?: () => void };
 
 export function SaveControls(props: Props) {
   const router = useRouter();
@@ -59,7 +59,7 @@ export function SaveControls(props: Props) {
         {state.status === "saving" ? "Saving…" : state.id ? "Save now" : "Save"}
       </Button>
       <Button variant="outline" size="lg" disabled={busy || state.status === "saving"} onClick={() => void share()}>Share</Button>
-      <Button size="lg" disabled title="Cook mode is coming next">Start cooking</Button>
+      <Button size="lg" disabled={!props.onStartCooking} onClick={props.onStartCooking}>Start cooking</Button>
     </div>
     <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
       {state.status === "saved" ? "Saved in this browser's kitchen." : state.status === "pending" ? "Unsaved changes · autosaving shortly…" : state.status === "saving" ? "Saving recipe and chat…" : state.status === "error" ? "Changes haven't been saved." : "Save to keep this recipe in My Kitchen."}

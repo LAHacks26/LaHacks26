@@ -10,7 +10,12 @@ import {
   type MouseEvent,
 } from "react";
 import { ChatDock } from "@/components/chat/ChatDock";
+import { CookMode } from "@/components/cook/CookMode";
+import { TimerTray } from "@/components/cook/TimerTray";
+import { useTimerAlarms } from "@/components/cook/useTimerAlarms";
+import { unlockChime } from "@/lib/cook/chime";
 import { useChatStore } from "@/lib/store/chatStore";
+import { readCookState, useCookStore, type CookTimer } from "@/lib/store/cookStore";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { parseAllergies, readAllergies, readAllergiesRaw, subscribeAllergies } from "@/lib/allergies";
@@ -31,6 +36,7 @@ import { readSavedDraft } from "@/lib/store/savedDraft";
 // and reads the working copy, edit lock, glow and undo toast from the store.
 
 const TOAST_MS = 8000;
+const NO_TIMERS: CookTimer[] = [];
 const WITH_PREFIX = /^with\s+/i;
 const FALLBACK_ERROR = "Saffron couldn't make that change. Try again.";
 const STALE_ERROR = "The recipe changed. Try again.";
@@ -143,6 +149,51 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, f
   // Re-runs the last explain or edit for "Try again".
   const retryRef = useRef<(() => void) | null>(null);
 
+  // Cook mode (PRD §5.6) is keyed by this editor's recipeKey, so saves and forks of one source keep separate progress.
+  const cooking = useCookStore((state) => state.active && state.recipeKey === recipeKey);
+  const cookTimers = useCookStore((state) => (state.recipeKey === recipeKey ? state.timers : NO_TIMERS));
+  // True once Start cooking is pressed: that click is the gesture the mic and chime need.
+  const [armVoice, setArmVoice] = useState(false);
+  const resumedRef = useRef(false);
+  const loadedStepIds = current ? current.recipe.steps.map((step) => step.id).join("\n") : null;
+  useTimerAlarms(recipeKey);
+
+  // Resumes cook state after a refresh, and keeps it in step with edits (clicks, chat or voice).
+  useEffect(() => {
+    if (loadedStepIds === null) return;
+    const ids = loadedStepIds ? loadedStepIds.split("\n") : [];
+    const store = useCookStore.getState();
+    if (!resumedRef.current) {
+      resumedRef.current = true;
+      if (store.recipeKey !== recipeKey) {
+        const saved = readCookState(recipeKey);
+        if (saved && (saved.active || saved.timers.length > 0)) {
+          store.start(recipeKey, ids);
+          if (!saved.active) useCookStore.getState().end();
+        }
+        return;
+      }
+    }
+    if (store.recipeKey === recipeKey) store.syncSteps(ids);
+  }, [loadedStepIds, recipeKey]);
+
+  function startCooking() {
+    if (!current) return;
+    unlockChime();
+    closePopover();
+    setArmVoice(true);
+    const ids = current.recipe.steps.map((step) => step.id);
+    const saved = readCookState(recipeKey);
+    const store = useCookStore.getState();
+    store.start(recipeKey, ids);
+    // Ended after the last step: cook it again from the top. Timers carry over; unfinished progress resumes.
+    if (saved && !saved.active && ids.length > 0 && ids.every((id) => saved.doneStepIds.includes(id))) {
+      for (const id of ids) store.markUndone(id);
+      store.focusStep(ids[0]!);
+    }
+    window.scrollTo({ top: 0 });
+  }
+
   // Loads this recipe before paint. load() restores this recipe's saved working copy when there is one.
   useLayoutEffect(() => {
     const store = useRecipeStore.getState();
@@ -158,16 +209,19 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, f
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipeKey]);
 
-  // Ctrl/Cmd+Z undoes, unless the user is typing in a field.
+  // Ctrl/Cmd+Z undoes, unless the user is typing in a field. Not in cook mode: there is no undo
+  // toast there, so a stray keypress would silently revert a voice edit.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) return;
       if (event.key.toLowerCase() !== "z" || isTypingTarget(event.target)) return;
+      const cook = useCookStore.getState();
+      if (cook.active && cook.recipeKey === recipeKey) return;
       if (useRecipeStore.getState().undo()) event.preventDefault();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [recipeKey]);
 
   // The undo toast goes away on its own after a few seconds.
   useEffect(() => {
@@ -498,7 +552,10 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, f
       : undefined;
 
   return (
+    <>
+    {/* Hidden, not unmounted, while cooking: SaveControls keeps autosaving voice edits. */}
     <div
+      hidden={cooking}
       onMouseUp={onMouseUp}
       onPointerDown={() => {
         phraseGestureRef.current = false;
@@ -507,7 +564,7 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, f
       className={current ? undefined : "pointer-events-none opacity-60"}
     >
       <RecipeView
-        headerActions={current ? <SaveControls recipeKey={recipeKey} sourceRecipeId={sourceRecipeId} forkedFromSlug={forkedFromSlug} initial={savedDocument} /> : null}
+        headerActions={current ? <SaveControls recipeKey={recipeKey} sourceRecipeId={sourceRecipeId} forkedFromSlug={forkedFromSlug} initial={savedDocument} onStartCooking={startCooking} /> : null}
         chatDock={current ? <ChatDock recipeKey={recipeKey} initialMessages={savedDocument?.messages} /> : null}
         onContinueChat={(line) => {
           const chat = useChatStore.getState();
@@ -544,5 +601,15 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, f
         onUndo={() => useRecipeStore.getState().undo()}
       />
     </div>
+    {cooking && current ? (
+      <CookMode recipeKey={recipeKey} recipe={view} allergies={allergies} unit={unit} armOnStart={armVoice} />
+    ) : null}
+    {/* Timers keep running after End cooking. Bottom-left, clear of the chat button. */}
+    {!cooking && cookTimers.length > 0 ? (
+      <div className="fixed bottom-4 left-4 z-20">
+        <TimerTray timers={cookTimers} onCancel={(id) => useCookStore.getState().cancelTimer(id)} />
+      </div>
+    ) : null}
+    </>
   );
 }
