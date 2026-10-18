@@ -23,6 +23,8 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 ## Env
 Copy `.env.example` to `.env.local` and fill it in. Never commit any `.env*` file except `.env.example`. When you add an env var, add it to `.env.example` in the same change.
 
+**Database access:** the venue Wi-Fi blocks outbound Postgres ports (Tiger uses 31015), so DB connections from the laptop time out there. Ports 443 and 8080 work. Anything that touches the DB from the laptop (`npm run db:migrate`, DB-backed pages in `npm run dev`) needs a phone hotspot. If a DB call times out, ask the user to switch networks; don't debug the code or probe ports.
+
 ## Workflow
 1. **PRD** — Opus, high effort. Expand the idea with `/grill-me` (or `/jmo-workflow:interview`), review the app flow with `/lavish`, loop between the two. Save the PRD in `docs/PRD.md`.
 2. **UI mocks** — generate mocks from the final PRD; polish with `/jmo-workflow:better-ui` and `/jmo-workflow:animate`.
