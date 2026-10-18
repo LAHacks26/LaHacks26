@@ -9,9 +9,9 @@ Last updated 2026-10-18, for any coding agent (Codex, Claude Code, etc.) picking
 | 0 Scaffold, schema, DB, deploy skeleton | Done | `main` |
 | UI mocks (`/mocks/*`) | Done | `main` |
 | 1 URL import → recipe page | **Done, tested end to end** | `main` |
-| 2 Hero: click a line → ask → recipe edits itself | Engine, store, AI routes and allergen safety net **merged**. The UI wiring is **finishing its review-fix round** (Task B). | `david/phase-2`, UI on `wip/phase-2-ui` |
-| 3 Chat | Contract merged. The server route and the UI dock are **being built** | local worktrees (see below) |
-| 4 Search | Contract and **search page merged**. The server (pipeline, mock agent, SSE) is **built and live-tested, awaiting review** | `david/phase-2`, server local |
+| 2 Hero: click a line → ask → recipe edits itself | Engine, store, AI routes and allergen safety net **merged**. The UI wiring is built and browser-tested against stubs, but **its review fixes are mostly not applied** (Task B) | `david/phase-2` + `wip/phase-2-ui` |
+| 3 Chat | Contract merged. **Server and UI not started** (Task E) | `david/phase-2` |
+| 4 Search | Contract and **search page merged**. The server is **built and live-tested; its review was not finished** (Task C) | `david/phase-2` + `wip/phase-4-search-server` |
 | 5 Auth / save / share | Not started. No Google OAuth credentials yet (Task F) | — |
 | 6 Cook mode + voice | Contracts only (`src/lib/voice/types.ts`, `src/lib/store/cookStore.ts` stub) | `david/phase-2` |
 | 7 Scaler / units / schedule | **Pure functions merged** (`src/lib/recipe/{scale,units,schedule}.ts`). Not wired into the UI yet (Task D) | `david/phase-2` |
@@ -26,18 +26,10 @@ Last updated 2026-10-18, for any coding agent (Codex, Claude Code, etc.) picking
   - the allergen safety net;
   - the Phase 7 functions;
   - the search page.
-- `wip/phase-2-ui`: a snapshot of the Phase 2 UI wiring, taken mid-way through its review-fix round. Unreviewed, so don't merge it as is (Task B).
+- `wip/phase-2-ui`: the Phase 2 UI wiring, built on `david/phase-2`. Its first review returned **CHANGES NEEDED**. Of the 9 fixes (Task B), only #6 and #9 appear to be in, so re-check every item. Don't merge it as is.
+- `wip/phase-4-search-server`: the Phase 4 server, built on `david/phase-2`. 253 tests pass and it was live-tested, but **the review was interrupted**. Run a review, then merge (Task C).
 
-**Work in progress on David's laptop.** These live in agent worktrees under `.claude/worktrees/` and are not on GitHub until reviewed and merged:
-
-| Work | Worktree |
-|---|---|
-| Phase 2 UI wiring | `agent-af277dad802f70d7a` |
-| Phase 4 search server | `agent-ae9f37309420f6a54` |
-| Phase 3 chat server | `agent-a2d09138d944769dd` |
-| Phase 3 chat UI | `agent-a5f048929344d87b6` |
-
-If that laptop's session is gone, rebuild these from the specs in §3. The contracts make that straightforward.
+Both WIP branches are single snapshot commits on top of the agents' worktree branches. To continue one, check it out, make a branch from it, and fix there. All agents were stopped on 2026-10-18 to save tokens. No other work is pending anywhere.
 
 **The live site** (https://96-30-204-210.sslip.io) still runs the old mocks-only build. Nothing since Phase 0 is deployed. See §6.
 
@@ -82,7 +74,7 @@ If that laptop's session is gone, rebuild these from the specs in §3. The contr
 ## 3. Next tasks, in order
 
 ### Task B: finish and merge the Phase 2 UI wiring (hero feature)
-This is in progress. A snapshot is on `wip/phase-2-ui`; the newest version is in worktree `agent-af277dad802f70d7a`. The demo script steps 4–7 in PRD §3 are its acceptance test.
+The code is on `wip/phase-2-ui`. Apply the review fixes listed below, re-review, and merge. The demo script steps 4–7 in PRD §3 are its acceptance test.
 
 **What it contains:**
 - `src/lib/api/aiClient.ts`
@@ -91,16 +83,19 @@ This is in progress. A snapshot is on `wip/phase-2-ui`; the newest version is in
 - `src/lib/allergies.ts`, using the localStorage key `saffron:allergies`.
 - The `?q=` prefill on the landing page.
 
-**The review-fix round being applied:**
-1. Mouseup inside the popover re-opened and reset it.
-2. Edits were not tied to the recipe or abortable on unmount; dropped results were silent.
-3. Mode desync when switching actions mid-stream.
-4. Trigger clicks swallowed while text was selected.
-5. Rejection chips on non-ingredients.
-6. Mock explain states.
-7. A flash before the stored copy loads.
-8. `aria-live` and focus handling.
-9. Real allergies sent with every request.
+**Review fixes to apply.** These are from the reviewer, by file and line in `RecipeEditor.tsx`, `RecipeView.tsx` and `LinePopover.tsx`:
+
+1. **HIGH:** React `mouseup` bubbles through the popover portal, and a phrase selection survives button clicks. So clicking Explain, Ask or Try again inside a phrase popover re-runs `openLine`, which resets the popover. In `onMouseUp`, return early when the target is inside the popover, or when the selection equals the open phrase target.
+2. Tie edits to the recipe. Capture `sourceRecipeId` and bail out unless `getState().copy?.sourceRecipeId` still matches. Pass an `AbortController` to `requestEdit` and abort it on unmount. If the popover was closed, show a rejected, impossible or error result as a sonner toast instead of dropping it.
+3. Switching action mid-stream: abort the explain stream and bump `bodyRef`, so stale results are ignored.
+4. `RecipeView.tsx:~181`: remove the live `selectedPageText() !== ""` check; it swallows trigger clicks and Enter/Space. Use a short-lived ref set by the phrase `onMouseUp` instead.
+5. Rejection chips on a non-ingredient target send action `ask`, not `substitute`.
+6. Add `saved: true` to the explain mock states in `src/lib/mocks/recipe.ts` (appears done).
+7. Avoid the flash of the server recipe before the stored copy loads. A reduced-opacity, non-interactive render is enough.
+8. `LinePopover`: add `aria-live="polite"` on the answer body, and move focus to the popup when the body changes.
+9. Create `src/lib/allergies.ts` with `readAllergies` and `writeAllergies` on the `saffron:allergies` key, and send its value with every AI request (appears done).
+
+The store contract may also change in Task E: `editing.target` can become null for whole-recipe edits.
 
 **When it's done:**
 1. Re-review it, then merge into `david/phase-2`.
@@ -114,7 +109,16 @@ This is in progress. A snapshot is on `wip/phase-2-ui`; the newest version is in
    This is also the first check of real Gemini patches against the real patch engine.
 
 ### Task C: Phase 4 search server, then landing wiring
-The server is built in worktree `agent-ae9f37309420f6a54` and awaits review, against `src/lib/search/types.ts`. Live test results:
+The server is built on `wip/phase-4-search-server` and needs a review, against `src/lib/search/types.ts`.
+
+**Review focus:**
+- Leaks in the in-memory registry, timers and pings over a long-running process.
+- `enqueue` after `close` on the SSE stream.
+- A gap between replay and subscribe.
+- The `importRecipe` `onParsed` hook must not poison the in-flight dedupe map.
+- `meta.readyBy` must echo the request's ISO string verbatim.
+
+Live test results:
 - A search for "butter chicken" streamed the cached recipe instantly, then 3 candidates.
 - A search for "15-minute butter chicken" dropped every candidate as too long, without any Gemini calls.
 - The cosine-similarity threshold is tuned to **0.64**. Correct matches score 0.65–0.76; "chocolate cake" doesn't match mac and cheese.
@@ -142,8 +146,8 @@ What the server consists of:
 - **`IngredientList`:** show `formatIngredientQty(scaleIngredient(...), system)`.
 - **`StepList`:** show `stepClockTimes` per step when a ready-by is set, and pass the step text through `convertTemperaturesInText(text, system)`.
 
-### Task E: Phase 3 chat (being built), then integration
-**Server**, in worktree `agent-a2d09138d944769dd`:
+### Task E: Phase 3 chat (not started; build this design)
+**Server:**
 - `src/lib/ai/chat.ts`: Gemini detects the intent, then routes it:
 
   | Intent | Goes to |
@@ -156,7 +160,7 @@ What the server consists of:
 
 - The route is `/api/ai/chat`.
 
-**UI**, in worktree `agent-a5f048929344d87b6`:
+**UI:**
 - `src/lib/store/chatStore.ts`: localStorage `saffron:chat:<id>`, context chips, and the send flow with undo.
 - `src/lib/api/chatClient.ts`
 - `src/components/chat/ChatDock.tsx`
