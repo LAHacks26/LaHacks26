@@ -9,11 +9,12 @@ import {
   type VoiceTurnRequest,
   type VoiceTurnResponse,
 } from "./types";
+import { speakText } from "./speech";
 import { matchWakeWord } from "./wakeWord";
 
-// Web Speech voice (PRD §11.1, §11.3): a wake-word listener plus the stub provider
-// (SpeechRecognition → POST /api/voice/turn → speechSynthesis). Chrome and Edge only; Chrome sends
-// the audio to Google's recognizer.
+// Cook-mode voice (PRD §11.1, §11.3): a wake-word listener plus the provider
+// (SpeechRecognition → POST /api/voice/turn → speakText, which uses ElevenLabs when configured).
+// Recognition is Chrome and Edge only; Chrome sends the audio to Google's recognizer.
 
 type RecognitionResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 type RecognitionEvent = { resultIndex: number; results: ArrayLike<RecognitionResult> };
@@ -147,18 +148,27 @@ export type WebSpeechDeps = {
   runTool(call: VoiceToolCall): Promise<string>;
   /** Defaults to POST /api/voice/turn. */
   requestTurn?(body: VoiceTurnRequest, signal: AbortSignal): Promise<VoiceTurnResponse>;
+  /** Speaks a reply and resolves when it ends. Defaults to speakText (ElevenLabs or the browser voice). */
+  speak?(text: string, signal: AbortSignal): Promise<void>;
 };
 
 const clip = (text: string, max: number) => (text.length > max ? text.slice(0, max) : text);
 
 /** Open voice sessions. announce() stays quiet while one is open, so the mic doesn't transcribe it. */
 let openSessions = 0;
+/** Announcements play one after another (ElevenLabs audio would otherwise overlap); a session start cuts the current one. */
+let announcements: Promise<void> = Promise.resolve();
+let announcement: AbortController | null = null;
 
 function defaultRequestTurn(body: VoiceTurnRequest, signal: AbortSignal): Promise<VoiceTurnResponse> {
   return postJson("/api/voice/turn", body, VoiceTurnResponseSchema, signal, TURN_TIMEOUT_MS);
 }
 
-/** The Web Speech stub provider. One session = listen → think → act → speak, repeated until silence. */
+/**
+ * The Web Speech provider. One session = one exchange: listen for the command, think, act, speak,
+ * then close, so the cook says "Hey Saffron" again for the next one. A session that hears nothing
+ * closes after SILENCE_MS. History carries across sessions, so follow-up questions keep their context.
+ */
 export class WebSpeechProvider implements VoiceProvider {
   private context: VoiceContext | null = null;
   private active = false;
@@ -170,6 +180,7 @@ export class WebSpeechProvider implements VoiceProvider {
   /** The silence timer is the speech cap (SPEECH_CAP_MS) rather than the plain countdown. */
   private capped = false;
   private request: AbortController | null = null;
+  private speech: AbortController | null = null;
   private readonly statusListeners = new Set<(status: VoiceStatus) => void>();
   private readonly turnListeners = new Set<(turn: VoiceTurn) => void>();
 
@@ -180,7 +191,8 @@ export class WebSpeechProvider implements VoiceProvider {
     this.context = opts.context;
     this.active = true;
     openSessions++;
-    this.history = [];
+    // A timer announcement still talking would be heard by this session's mic.
+    announcement?.abort();
     const session = ++this.session;
     const first = opts.firstUtterance?.trim();
     if (first) await this.handle(first, session);
@@ -198,7 +210,8 @@ export class WebSpeechProvider implements VoiceProvider {
     const recognition = this.recognition;
     this.recognition = null;
     recognition?.abort();
-    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    this.speech?.abort();
+    this.speech = null;
     this.setStatus("idle");
   }
 
@@ -324,33 +337,22 @@ export class WebSpeechProvider implements VoiceProvider {
     if (session !== this.session) return;
     this.emit({ who: "saffron", text: clip(speech, 500) });
     await this.speak(speech, session);
-    this.listen(session);
+    // One exchange per wake word: close, and the cook mode re-arms "Hey Saffron".
+    if (session === this.session) await this.stop();
   }
 
-  private speak(text: string, session: number): Promise<void> {
-    if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") {
-      return Promise.resolve();
-    }
+  private async speak(text: string, session: number): Promise<void> {
+    if (session !== this.session) return;
     this.setStatus("speaking");
-    return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
-      // Some browsers never fire onend (no voices, background tab), so a timer bounds the wait.
-      const guard = setTimeout(finish, Math.min(30_000, 1500 + text.length * 90));
-      function finish() {
-        clearTimeout(guard);
-        resolve();
-      }
-      utterance.onend = finish;
-      utterance.onerror = finish;
-      if (session !== this.session) {
-        finish();
-        return;
-      }
-      // cancel() right before speak() can swallow the utterance in some Chrome builds; only clear real leftovers.
-      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-    });
+    const controller = new AbortController();
+    this.speech = controller;
+    try {
+      await (this.deps.speak ?? speakText)(text, controller.signal);
+    } catch {
+      // A failed voice must not strand the session: handle() still closes it and the wake word re-arms.
+    } finally {
+      if (this.speech === controller) this.speech = null;
+    }
   }
 }
 
@@ -360,8 +362,11 @@ export class WebSpeechProvider implements VoiceProvider {
  */
 export function announce(text: string): void {
   if (openSessions > 0) return;
-  if (typeof window === "undefined" || !window.speechSynthesis || typeof SpeechSynthesisUtterance === "undefined") return;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "en-US";
-  window.speechSynthesis.speak(utterance);
+  announcements = announcements.then(async () => {
+    if (openSessions > 0) return;
+    const controller = new AbortController();
+    announcement = controller;
+    await speakText(text, controller.signal).catch(() => undefined);
+    if (announcement === controller) announcement = null;
+  });
 }

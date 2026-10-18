@@ -28,7 +28,7 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - **zod v4** for shared schemas. `src/lib/recipe/schema.ts` is the frozen contract between frontend and backend: do not change it inside a builder task; ask the orchestrator.
 - **Zustand** for client state.
 - **Postgres on Tiger Cloud** with pgvector. Drizzle ORM and the `postgres` driver live in `src/lib/db/`; migrations go in `drizzle/`.
-- **Gemini** via `@google/genai`. **Browser Use Cloud** is real (API v2, `src/lib/search/browserUse.ts`) when `BROWSER_USE_MOCK=false` and a key is set; **ElevenLabs** is still stubbed (PRD §13.1).
+- **Gemini** via `@google/genai`. **Browser Use Cloud** is real (API v2, `src/lib/search/browserUse.ts`) when `BROWSER_USE_MOCK=false` and a key is set. **ElevenLabs** speaks Saffron's cook-mode replies (text-to-speech via `/api/voice/speak`) when `NEXT_PUBLIC_VOICE_PROVIDER=elevenlabs`; recognition stays Chrome Web Speech, and the conversational-agent route in PRD §11.1 is not used.
 - **Never trust URLs an agent writes.** Browser Use agents invent plausible recipe URLs that 404 when they don't open the page. Take candidate URLs from the step log (pages the browser actually loaded), and run one short agent per site in parallel: it is faster than one agent hopping across sites.
 - **MVP ownership:** anonymous HttpOnly device cookie (approved 2026-10-18). Google/Auth.js account linking is deferred. See `docs/ANONYMOUS_SAVES.md` for access, recovery, sharing and configuration limits.
 - **Tests:** vitest. **Hosting:** Vultr VM with pm2 and Caddy. The build needs dev dependencies (Tailwind, shadcn CSS), so deploys run a full `npm ci`, never `--omit=dev`.
