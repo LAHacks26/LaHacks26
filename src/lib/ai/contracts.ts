@@ -67,3 +67,42 @@ export const EditResponseSchema = z.object({
   result: AiEditResultSchema,
 });
 export type EditResponse = z.infer<typeof EditResponseSchema>;
+
+// --- Chat (PRD §5.5) ---
+
+export const ChatMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().trim().min(1).max(2000),
+});
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+/**
+ * POST /api/ai/chat → 200 ChatResponse. The last message is the user's new turn; earlier ones are
+ * history (the client sends at most the last 20). `contextRefs` are lines the user attached as chips.
+ */
+export const ChatRequestSchema = z
+  .object({
+    recipe: RecipeSchema,
+    baseVersion: z.number().int().min(0),
+    messages: z.array(ChatMessageSchema).min(1).max(20),
+    contextRefs: z.array(LineRefSchema).max(10).default([]),
+    allergies: AllergiesSchema,
+  })
+  .refine((r) => r.messages[r.messages.length - 1]?.role === "user", {
+    message: "the last message must be from the user",
+    path: ["messages"],
+  });
+export type ChatRequest = z.input<typeof ChatRequestSchema>;
+
+/**
+ * `reply` is always shown in the chat. `result` is set when the turn changed the recipe or needs a
+ * card: "patch" (whole-recipe transform or targeted edit, already validated like /api/ai/edit),
+ * "rejected", "impossible" (show Search instead), or "tip" (save under `result.target`).
+ * Plain questions and off-topic declines return only `reply`.
+ */
+export const ChatResponseSchema = z.object({
+  baseVersion: z.number().int().min(0),
+  reply: z.string().min(1),
+  result: AiEditResultSchema.optional(),
+});
+export type ChatResponse = z.infer<typeof ChatResponseSchema>;
