@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import type { ReactNode } from "react";
+import { DevFeedback } from "@/components/shell/DevFeedback";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="min-h-full flex flex-col font-sans antialiased bg-background text-foreground">
         <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
+        <DevFeedback />
       </body>
     </html>
   );

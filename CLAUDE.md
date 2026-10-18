@@ -20,6 +20,7 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
 - `npm run db:generate` writes SQL migrations to `drizzle/`. `npm run db:migrate` applies them and needs `DATABASE_URL` in `.env.local`.
 - Before reporting a task done, run: `npm run typecheck && npm run lint && npm test && npm run build`.
+- **Visual feedback (Agentation):** in `npm run dev` only, a toolbar (bottom-right) lets you click any element and leave a comment. Comments sync to Claude Code through the `agentation` MCP server (`npx -y agentation-mcp server`, HTTP on `localhost:4747`, registered in David's local Claude config). Read them with the `agentation_*` tools, fix, then resolve them. It never renders in production builds.
 - **Deploy** (Vultr VM, live at https://96-30-204-210.sslip.io): push the branch, then `ssh saffron 'sudo -iu saffron bash app/scripts/deploy.sh <branch>'` (default branch `main`). The `saffron` SSH alias and key are on David's laptop. Production env lives in `/home/saffron/app/.env.local` on the VM; update it with `scp`, never git. If you change `deploy/Caddyfile`, copy it to `/etc/caddy/Caddyfile` and run `systemctl reload caddy`. Don't deploy right before a demo: a failed build leaves the site degraded until the next good deploy.
 
 ## Env
