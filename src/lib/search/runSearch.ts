@@ -38,8 +38,11 @@ const MAX_CANDIDATES = 3;
 const POLL_INTERVAL_MS = 1_500;
 /** The agent is cancelled and the run fails after this long (PRD §10 step 3). */
 const AGENT_TIMEOUT_MS = 150_000;
-/** Global cap on agents running at once. Extra runs wait in a queue (PRD §10 step 6). */
-const MAX_CONCURRENT_AGENTS = 3;
+/**
+ * Global cap on searches with agents running at once. Extra runs wait in a queue (PRD §10 step 6).
+ * Each real search uses 4 Browser Use browsers (3 sites + the web) and the account allows 10, so 2.
+ */
+const MAX_CONCURRENT_AGENTS = 2;
 /** Finished runs stay readable this long, then they are deleted from memory. */
 const FINISHED_RUN_TTL_MS = 10 * 60_000;
 
