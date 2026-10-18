@@ -27,6 +27,21 @@ afterEach(() => {
 });
 
 describe("recipe request ownership", () => {
+  it("isolates saved recipes that share the same public source", () => {
+    const store = useRecipeStore.getState();
+    store.loadWorkingCopy("saved:first", { recipe: butterChicken, version: 0, undoStack: [], sourceRecipeId: "shared-source", savedId: "first" });
+    const old = createRecipeSession("saved:first");
+    scopes.push(old);
+    old.beginEdit(target);
+    store.loadWorkingCopy("saved:second", { recipe: butterChicken, version: 0, undoStack: [], sourceRecipeId: "shared-source", savedId: "second" });
+    const current = createRecipeSession("saved:second");
+    scopes.push(current);
+    expect(old.currentCopy()).toBeNull();
+    expect(old.saveExplanation(target, "Old explanation", 0)).toBeNull();
+    expect(current.beginEdit(target)).toBe(true);
+    old.dispose();
+    expect(current.ownsEdit()).toBe(true);
+  });
   it("saves an explanation on the unchanged recipe", () => {
     const scope = open("a");
     expect(scope.saveExplanation(target, "Slice against the grain.", 0)).not.toBeNull();

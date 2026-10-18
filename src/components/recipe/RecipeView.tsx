@@ -60,6 +60,7 @@ export type LineTarget = { kind: LineKind; id: string };
 export type RecipeViewProps = {
   recipe: Recipe;
   chatDock?: ReactNode;
+  headerActions?: ReactNode;
   onContinueChat?: (line: ActiveLine) => void;
   /** The user's allergy list. Matching ingredients get a warning badge. */
   allergies?: string[];
@@ -138,6 +139,7 @@ function lineLabel(
 export function RecipeView({
   recipe,
   chatDock,
+  headerActions,
   onContinueChat,
   allergies = [],
   servings = recipe.servings,
@@ -231,7 +233,7 @@ export function RecipeView({
         style={glowStyle}
         className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-4 pt-8 pb-28 sm:px-6 sm:pt-12"
       >
-        <RecipeHeader recipe={recipe} mode={readOnly ? "readOnly" : "edit"} />
+        <RecipeHeader recipe={recipe} mode={readOnly ? "readOnly" : "edit"} actions={headerActions} />
 
         <StatsStrip recipe={recipe} servings={servings} unit={unit} readyBy={readyBy} onServingsChange={onServingsChange} onUnitChange={onUnitChange} />
 

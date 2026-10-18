@@ -2,7 +2,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useChatStore } from "@/lib/store/chatStore";
+import { useChatStore, type StoredChatMessage } from "@/lib/store/chatStore";
 import { useRecipeStore } from "@/lib/store/recipeStore";
 import { landingDestination } from "@/lib/search/landing";
 import { readAllergies } from "@/lib/allergies";
@@ -10,7 +10,7 @@ import { AskSaffronFab } from "../recipe/AskSaffronFab";
 import { ChatPanel, type ChatMessage } from "./ChatPanel";
 import { createChatSession } from "./chatSession";
 
-export function ChatDock({ recipeKey }: { recipeKey: string }) {
+export function ChatDock({ recipeKey, initialMessages }: { recipeKey: string; initialMessages?: StoredChatMessage[] }) {
   const chat = useChatStore();
   const editing = useRecipeStore((state) => state.editing);
   const version = useRecipeStore((state) => state.copy?.version);
@@ -18,11 +18,12 @@ export function ChatDock({ recipeKey }: { recipeKey: string }) {
   const search = useRef<AbortController | null>(null);
   const router = useRouter();
   useEffect(() => {
-    useChatStore.getState().load(recipeKey);
+    // The editor initializes saved chat before autosave subscribes. Standalone mocks still load here.
+    if (useChatStore.getState().recipeKey !== recipeKey) useChatStore.getState().load(recipeKey, initialMessages);
     const scope = createChatSession(recipeKey);
     session.current = scope;
     return () => { scope.dispose(); search.current?.abort(); session.current = null; };
-  }, [recipeKey]);
+  }, [recipeKey, initialMessages]);
   if (chat.recipeKey !== recipeKey) return null;
   const messages: ChatMessage[] = chat.messages.map((message) => ({
     id: message.id, role: message.role, text: message.content,

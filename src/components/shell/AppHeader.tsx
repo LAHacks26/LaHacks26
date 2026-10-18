@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BookOpen, ShieldAlert } from "lucide-react";
+import { BookOpen, Laptop, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/saffron";
 
@@ -12,9 +12,9 @@ export type AppHeaderProps = {
   homeHref?: string;
   /** Where "My Kitchen" goes. */
   kitchenHref?: string;
-  /** Called when "Allergies" is clicked. Presentational until wired up. */
+  /** Opens a local sheet when provided; otherwise links to the production kitchen. */
   onAllergiesClick?: () => void;
-  /** Called when "Sign in" is clicked. Presentational until wired up. */
+  /** Optional mock override. Production uses anonymous browser ownership. */
   onSignInClick?: () => void;
   /** Extra controls appended after the built-in ones. */
   right?: ReactNode;
@@ -46,25 +46,26 @@ export function AppHeader({
             <span className="hidden sm:inline">My Kitchen</span>
           </Link>
 
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Allergies"
-            onClick={onAllergiesClick}
-            className="gap-1.5 px-2.5"
-          >
-            <ShieldAlert className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Allergies</span>
-          </Button>
+          {onAllergiesClick ? (
+            <Button variant="ghost" size="sm" aria-label="Allergies" onClick={onAllergiesClick} className="gap-1.5 px-2.5">
+              <ShieldAlert className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Allergies</span>
+            </Button>
+          ) : (
+            <Link href="/kitchen?allergies=1" aria-label="Allergies" className={linkClass}>
+              <ShieldAlert className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Allergies</span>
+            </Link>
+          )}
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSignInClick}
-            className="px-3"
-          >
-            Sign in
-          </Button>
+          {onSignInClick ? (
+            <Button variant="outline" size="sm" onClick={onSignInClick} className="px-3">Sign in</Button>
+          ) : (
+            <Link href={kitchenHref} aria-label="Saved in this browser" title="Recipes are saved for this browser" className={linkClass}>
+              <Laptop className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">This browser</span>
+            </Link>
+          )}
 
           {right}
         </nav>

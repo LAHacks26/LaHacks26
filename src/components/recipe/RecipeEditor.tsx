@@ -23,6 +23,9 @@ import { useRecipeStore } from "@/lib/store/recipeStore";
 import type { PopoverAction, SelectionAnchor } from "./LinePopover";
 import { type ActiveLine, RecipeView } from "./RecipeView";
 import { createRecipeSession, type RecipeSession } from "./recipeSession";
+import type { SavedDocument } from "@/lib/saved/contracts";
+import { SaveControls } from "./SaveControls";
+import { readSavedDraft } from "@/lib/store/savedDraft";
 
 // The interactive recipe page (PRD §5.3, §5.4). Owns the popover state machine and the AI calls,
 // and reads the working copy, edit lock, glow and undo toast from the store.
@@ -40,9 +43,12 @@ const LOADING_TEXT: Record<EditAction, string> = {
 };
 
 export type RecipeEditorProps = {
-  sourceRecipeId: string;
+  sourceRecipeId?: string;
   recipe: Recipe;
   readyBy?: string;
+  savedDocument?: SavedDocument;
+  forkedFromSlug?: string;
+  draftKey?: string;
 };
 
 function subscribeMinute(onChange: () => void) {
@@ -85,19 +91,21 @@ function withSelection(tip: LineRef, target: LineRef): LineRef {
 
 export function RecipeEditor(props: RecipeEditorProps) {
   // Navigation must also reset popovers, retry closures and selection state.
-  return <RecipeEditorSession key={`${props.sourceRecipeId}:${props.readyBy ?? ""}`} {...props} />;
+  const recipeKey = props.savedDocument ? `saved:${props.savedDocument.id}` : props.draftKey ?? props.sourceRecipeId!;
+  return <RecipeEditorSession key={`${recipeKey}:${props.readyBy ?? ""}`} recipeKey={recipeKey} {...props} />;
 }
 
-function RecipeEditorSession({ sourceRecipeId, recipe, readyBy }: RecipeEditorProps) {
+function RecipeEditorSession({ sourceRecipeId, recipe, readyBy, savedDocument, forkedFromSlug, recipeKey }: RecipeEditorProps & { recipeKey: string }) {
   const router = useRouter();
   const copy = useRecipeStore((state) => state.copy);
+  const loadedKey = useRecipeStore((state) => state.recipeKey);
   const editing = useRecipeStore((state) => state.editing);
   const glow = useRecipeStore((state) => state.glow);
   const undoToast = useRecipeStore((state) => state.toast);
   const newTipIds = useRecipeStore((state) => state.newTipIds);
 
   // Until the store holds this recipe's working copy, show the server recipe without interaction.
-  const current = copy && copy.sourceRecipeId === sourceRecipeId ? copy : null;
+  const current = copy && loadedKey === recipeKey ? copy : null;
   const view = current ? current.recipe : recipe;
   const [servings, setServings] = useState<number | null>(null);
   const [unit, setUnit] = useState<UnitSystem>("us");
@@ -137,13 +145,18 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy }: RecipeEditorPr
 
   // Loads this recipe before paint. load() restores this recipe's saved working copy when there is one.
   useLayoutEffect(() => {
-    useRecipeStore.getState().load(sourceRecipeId, recipe, readyBy);
-    const scope = createRecipeSession(sourceRecipeId);
+    const store = useRecipeStore.getState();
+    const draft = savedDocument ? readSavedDraft(savedDocument.id) : null;
+    if (savedDocument) store.loadWorkingCopy(recipeKey, draft ? { ...draft.copy, savedId: savedDocument.id, sourceRecipeId: savedDocument.copy.sourceRecipeId } : savedDocument.copy);
+    else if (sourceRecipeId) store.load(sourceRecipeId, recipe, readyBy);
+    else store.loadWorkingCopy(recipeKey, { recipe, version: 0, undoStack: [] }, true);
+    useChatStore.getState().load(recipeKey, draft?.messages ?? savedDocument?.messages);
+    const scope = createRecipeSession(recipeKey);
     recipeSessionRef.current = scope;
     return () => scope.dispose();
     // The key remounts for a new source/deadline. A refreshed server object must not wipe edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceRecipeId]);
+  }, [recipeKey]);
 
   // Ctrl/Cmd+Z undoes, unless the user is typing in a field.
   useEffect(() => {
@@ -494,7 +507,8 @@ function RecipeEditorSession({ sourceRecipeId, recipe, readyBy }: RecipeEditorPr
       className={current ? undefined : "pointer-events-none opacity-60"}
     >
       <RecipeView
-        chatDock={current ? <ChatDock recipeKey={sourceRecipeId} /> : null}
+        headerActions={current ? <SaveControls recipeKey={recipeKey} sourceRecipeId={sourceRecipeId} forkedFromSlug={forkedFromSlug} initial={savedDocument} /> : null}
+        chatDock={current ? <ChatDock recipeKey={recipeKey} initialMessages={savedDocument?.messages} /> : null}
         onContinueChat={(line) => {
           const chat = useChatStore.getState();
           const label = line.selectedText ?? line.label ?? (line.kind === "ingredient"

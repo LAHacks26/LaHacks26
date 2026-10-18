@@ -13,6 +13,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { COMMON_ALLERGENS } from "@/lib/recipe/schema";
+import { MAX_ALLERGIES, MAX_ALLERGY_LENGTH, normalizeAllergies } from "@/lib/allergies";
 
 export type AllergySheetProps = {
   open: boolean;
@@ -23,17 +24,22 @@ export type AllergySheetProps = {
 };
 
 export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySheetProps) {
-  const [draft, setDraft] = useState<string[]>(selected);
+  const [draft, setDraft] = useState<string[]>(() => normalizeAllergies(selected));
   const [other, setOther] = useState("");
   const [wasOpen, setWasOpen] = useState(open);
+  const [dirty, setDirty] = useState(false);
+  const selectedKey = JSON.stringify(normalizeAllergies(selected));
+  const [lastSelectedKey, setLastSelectedKey] = useState(selectedKey);
   const otherId = useId();
 
-  // Reset the draft each time the sheet opens (adjusting state during render, not in an effect).
-  if (open !== wasOpen) {
+  // Hydrate a directly opened sheet, but never replace an in-progress draft with a late response.
+  if (open !== wasOpen || selectedKey !== lastSelectedKey) {
     setWasOpen(open);
-    if (open) {
-      setDraft(selected);
+    setLastSelectedKey(selectedKey);
+    if (open && (!wasOpen || !dirty)) {
+      setDraft(normalizeAllergies(selected));
       setOther("");
+      setDirty(false);
     }
   }
 
@@ -41,16 +47,18 @@ export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySh
   const custom = draft.filter((allergen) => !common.includes(allergen));
 
   function toggle(allergen: string) {
+    setDirty(true);
     setDraft((prev) =>
-      prev.includes(allergen) ? prev.filter((item) => item !== allergen) : [...prev, allergen]
+      prev.includes(allergen) ? prev.filter((item) => item !== allergen) : normalizeAllergies([...prev, allergen])
     );
   }
 
   function addOther(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const value = other.trim().toLowerCase();
-    if (!value) return;
-    setDraft((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    if (!value || value.length > MAX_ALLERGY_LENGTH || draft.length >= MAX_ALLERGIES) return;
+    setDirty(true);
+    setDraft((prev) => normalizeAllergies([...prev, value]));
     setOther("");
   }
 
@@ -74,6 +82,7 @@ export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySh
                     variant={on ? "danger" : "default"}
                     aria-pressed={on}
                     onClick={() => toggle(allergen)}
+                    disabled={!on && draft.length >= MAX_ALLERGIES}
                     className="capitalize"
                   >
                     {allergen}
@@ -91,15 +100,20 @@ export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySh
               <Input
                 id={otherId}
                 value={other}
-                onChange={(event) => setOther(event.target.value)}
+                onChange={(event) => { setDirty(true); setOther(event.target.value); }}
                 placeholder="For example, sesame seed"
                 autoComplete="off"
+                maxLength={MAX_ALLERGY_LENGTH}
+                aria-describedby={`${otherId}-limit`}
                 className="h-10 text-sm"
               />
-              <Button type="submit" variant="outline" className="h-10 bg-background" disabled={!other.trim()}>
+              <Button type="submit" variant="outline" className="h-10 bg-background" disabled={!other.trim() || draft.length >= MAX_ALLERGIES}>
                 Add
               </Button>
             </div>
+            <p id={`${otherId}-limit`} className="text-xs text-muted-foreground">
+              {draft.length} of {MAX_ALLERGIES} allergies. Up to {MAX_ALLERGY_LENGTH} characters each. Select a saved allergy to remove it.
+            </p>
             {custom.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {custom.map((allergen) => (
@@ -123,7 +137,7 @@ export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySh
             size="lg"
             className="h-11 w-full"
             onClick={() => {
-              onSave(draft);
+              onSave(normalizeAllergies(draft));
               onOpenChange(false);
             }}
           >
