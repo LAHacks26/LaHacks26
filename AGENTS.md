@@ -1,3 +1,7 @@
+# Saffron
+
+Start with `docs/HANDOFF.md` (current state and next tasks), then `CLAUDE.md` (project rules) and `docs/PRD.md` (the spec).
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 ## This is NOT the Next.js you know
