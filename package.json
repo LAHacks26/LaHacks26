@@ -14,7 +14,8 @@
     "test": "vitest run --passWithNoTests",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "seed": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
