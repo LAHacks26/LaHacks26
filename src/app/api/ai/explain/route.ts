@@ -40,6 +40,7 @@ export async function POST(request: Request): Promise<Response> {
   const encoder = new TextEncoder();
   let pending: string | null = first.done ? null : first.value;
   let finished = first.done === true;
+  let cancelled = false;
 
   const stream = new ReadableStream<Uint8Array>({
     async pull(controller) {
@@ -62,13 +63,17 @@ export async function POST(request: Request): Promise<Response> {
         controller.enqueue(encoder.encode(next.value));
       } catch (err) {
         finished = true;
-        console.error("[ai/explain] stream failed mid-way", err instanceof Error ? err.name : typeof err);
-        if (!(err instanceof AiError && err.code === "timeout")) Sentry.captureException(err);
+        // A client that left caused this error on purpose: it is not a failure to log or report.
+        if (!(cancelled || request.signal.aborted)) {
+          console.error("[ai/explain] stream failed mid-way", err instanceof Error ? err.name : typeof err);
+          if (!(err instanceof AiError && err.code === "timeout")) Sentry.captureException(err);
+        }
         // Error the stream rather than close it: a closed stream would look like a complete answer.
-        controller.error(err);
+        if (!cancelled) controller.error(err);
       }
     },
     cancel() {
+      cancelled = true;
       abort.abort();
       // Runs the generator's finally block, which stops the Gemini request.
       void iterator.return?.(undefined);

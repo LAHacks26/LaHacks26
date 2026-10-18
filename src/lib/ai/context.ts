@@ -81,36 +81,174 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// Plant milks are not dairy, so they never trip a "milk" or "dairy" allergy.
-const PLANT_MILK = /\b(?:coconut|almond|oat|soy|rice|cashew)\s+milks?\b/gi;
-const MILK_STEMS = new Set(["milk", "dairy"]);
+/**
+ * Allergy words that name another allergen, keyed by normalized stem (lowercase, one trailing "s"
+ * removed). "milk" is dairy, "nut" is tree nut and peanut, "wheat" is gluten.
+ */
+const ALLERGY_KEYS: Record<string, readonly string[]> = {
+  milk: ["dairy"],
+  "milk product": ["dairy"],
+  lactose: ["dairy"],
+  casein: ["dairy"],
+  whey: ["dairy"],
+  nut: ["tree nut", "peanut"],
+  groundnut: ["peanut"],
+  wheat: ["gluten"],
+  soya: ["soy"],
+  soybean: ["soy"],
+  crustacean: ["shellfish"],
+  "shell fish": ["shellfish"],
+  "sesame seed": ["sesame"],
+};
 
-/** Removes negated mentions ("dairy-free", "free of dairy", "without eggs", "non-dairy") so they never count. */
-function stripNegations(text: string, term: string): string {
-  const negations = [
-    new RegExp(`\\b${term}[- ]free\\b`, "gi"),
-    new RegExp(`\\bfree of ${term}\\b`, "gi"),
-    new RegExp(`\\bwithout ${term}\\b`, "gi"),
-    new RegExp(`\\bnon-?${term}\\b`, "gi"),
+type Allergen = {
+  /** The generic name: "dairy-free" and "egg-free" also negate the item after them. */
+  key: string;
+  /** Other names for it. "wheat-free" negates only the word "wheat", so "wheat-free spelt bread" still counts. */
+  aliases: readonly string[];
+  /** Words that count as the allergen, besides the key and the aliases. */
+  words: readonly string[];
+};
+
+const ALLERGENS: Record<string, Allergen> = {
+  dairy: {
+    key: "dairy",
+    aliases: ["milk", "lactose", "casein", "whey"],
+    words: [
+      "butter", "buttermilk", "cheese", "cream", "yogurt", "yoghurt", "ghee", "paneer", "kefir",
+      "parmesan", "parmigiano", "mozzarella", "cheddar", "ricotta", "feta", "brie", "mascarpone", "halloumi",
+      "gouda", "gruyere", "half-and-half", "creamer", "custard", "gelato", "crème fraîche", "creme fraiche",
+      "curd", "butterscotch",
+    ],
+  },
+  "tree nut": {
+    key: "tree nut",
+    aliases: ["nut"],
+    words: [
+      "almond", "walnut", "pecan", "cashew", "pistachio", "hazelnut", "macadamia", "brazil nut", "pine nut",
+      "marzipan", "praline", "nutella", "chestnut",
+    ],
+  },
+  peanut: { key: "peanut", aliases: ["groundnut"], words: ["satay"] },
+  egg: {
+    key: "egg",
+    aliases: [],
+    words: ["mayonnaise", "mayo", "meringue", "aioli", "eggnog", "albumin", "hollandaise", "brioche"],
+  },
+  gluten: {
+    key: "gluten",
+    aliases: ["wheat"],
+    words: [
+      "barley", "rye", "spelt", "semolina", "couscous", "bread crumb", "breadcrumb", "flour", "pasta",
+      "spaghetti", "noodle", "bread", "panko", "tortilla", "seitan", "farro", "bulgur", "beer", "soy sauce",
+    ],
+  },
+  soy: {
+    key: "soy",
+    aliases: ["soya", "soybean"],
+    words: ["tofu", "tempeh", "edamame", "miso", "tamari", "natto"],
+  },
+  fish: {
+    key: "fish",
+    aliases: [],
+    words: [
+      "salmon", "tuna", "cod", "anchovy", "anchovies", "sardine", "fish sauce", "tilapia", "halibut", "trout",
+      "mackerel", "haddock", "catfish", "snapper", "swordfish", "herring", "worcestershire",
+    ],
+  },
+  shellfish: {
+    key: "shellfish",
+    aliases: ["crustacean", "shell fish"],
+    words: [
+      "shrimp", "prawn", "crab", "lobster", "scallop", "clam", "mussel", "oyster", "crayfish", "crawfish",
+      "langoustine", "squid", "calamari",
+    ],
+  },
+  sesame: { key: "sesame", aliases: ["sesame seed"], words: ["tahini", "hummus", "halva"] },
+};
+
+const NO_ALLERGEN: Allergen = { key: "", aliases: [], words: [] };
+
+/** Lookbehinds: a word is not the allergen when one of these comes right before it. */
+const FLOUR_EXCEPTION =
+  "(?<!\\b(?:rice|almond|coconut|oat|corn|chickpea|tapioca|buckwheat|cassava|potato|sorghum|quinoa|arrowroot|millet|teff|gram)[\\s-]+)";
+const NOODLE_EXCEPTION = "(?<!\\b(?:rice|glass|kelp|zucchini|mung bean)[\\s-]+)";
+const TORTILLA_EXCEPTION = "(?<!\\b(?:corn|rice)[\\s-]+)";
+const WORD_PREFIX: Record<string, string> = {
+  flour: FLOUR_EXCEPTION,
+  noodle: NOODLE_EXCEPTION,
+  pasta: NOODLE_EXCEPTION,
+  spaghetti: NOODLE_EXCEPTION,
+  tortilla: TORTILLA_EXCEPTION,
+};
+
+/** Dairy-looking words that are not dairy: plant milks, creams, cheeses and yogurts, nut and seed butters, cocoa butter, cream of tartar, butter beans. */
+const DAIRY_LOOKALIKES = new RegExp(
+  [
+    String.raw`\b(?:coconut|almond|oat|soy|rice|cashew|peanut|nut|sunflower|seed|cocoa|apple)\s+(?:milks?|creams?|butters?|cheeses?|yogh?urts?)\b`,
+    String.raw`\bcream of tartar\b`,
+    String.raw`\b(?:vegan|plant[\s-]+based|dairy[\s-]+free|non[\s-]*dairy)[\s-]+(?:cream cheese|butter|cheese|cream|milk|yogh?urt)s?\b`,
+    String.raw`\bbutter[\s-]?beans?\b`,
+    String.raw`\bbutter(?:nut|cup)\b`,
+  ].join("|"),
+  "gi",
+);
+
+/** Up to two words after a negated generic name, so "dairy-free butter" negates "butter" too. Stops at "and", "or", punctuation. */
+const NEGATED_ITEM = "(?:\\s+(?!(?:and|or|with|but|plus|to|for|in|of|on|at)\\b)[a-z][a-z'-]*){0,2}";
+
+function alternation(words: readonly string[]): string {
+  return words.map((word) => `${escapeRegExp(word)}(?:s|es)?`).join("|");
+}
+
+/** The negation forms for one set of names. `item` is the trailing consumption: NEGATED_ITEM for generic names, "" for aliases. */
+function negationPatterns(names: readonly string[], item: string): RegExp[] {
+  if (names.length === 0) return [];
+  const alt = alternation(names);
+  return [
+    new RegExp(`\\b(?:${alt})[- ]free\\b${item}`, "gi"),
+    new RegExp(`\\bfree of (?:${alt})\\b${item}`, "gi"),
+    new RegExp(`\\bwithout (?:${alt})\\b${item}`, "gi"),
+    new RegExp(`\\bnon-?(?:${alt})\\b${item}`, "gi"),
+    new RegExp(`\\b(?:${alt})less\\b${item}`, "gi"),
   ];
-  return negations.reduce((acc, pattern) => acc.replace(pattern, " "), text);
 }
 
 /**
- * Returns the allergy that `text` mentions, or undefined. Whole words only, so "egg" does not match
- * "eggplant", and a plural matches its singular ("peanuts" also catches "peanut butter"). Negated
- * mentions ("gluten-free", "without eggs") do not count, and plant milks are not dairy.
+ * Removes negated mentions so they never count. Generic names ("dairy-free", "egg-free") negate the
+ * item after them. Aliases ("milk-free", "wheat-free") negate only the word itself.
+ */
+function stripNegations(text: string, generic: readonly string[], aliases: readonly string[]): string {
+  const patterns = [...negationPatterns(generic, NEGATED_ITEM), ...negationPatterns(aliases, "")];
+  return patterns.reduce((acc, pattern) => acc.replace(pattern, " "), text);
+}
+
+/** Lowercase, single spaces, one trailing "s" removed: "Tree Nuts" becomes "tree nut". */
+function allergyStem(allergy: string): string {
+  return allergy.trim().toLowerCase().replace(/\s+/g, " ").replace(/s$/, "");
+}
+
+/**
+ * Returns the allergy that `text` mentions, or undefined. Each allergy counts its synonyms too ("butter"
+ * for dairy, "almond" for tree nuts, "pasta" for gluten). Whole words only, so "egg" does not match
+ * "eggplant". Negated mentions ("gluten-free flour", "egg-free mayo", "wheat-free spelt bread" is
+ * negated only for "wheat") and dairy lookalikes ("coconut milk", "peanut butter") do not count.
  */
 export function containsAllergen(text: string, allergies: readonly string[]): string | undefined {
   for (const allergy of allergies) {
-    const stem = allergy.trim().toLowerCase().replace(/s$/, "");
+    const stem = allergyStem(allergy);
     if (stem.length < 3) continue;
-    // A dairy allergy also covers the word "milk" (plant milks are removed first).
-    const names = stem === "dairy" ? ["dairy", "milk"] : [stem];
-    const term = `(?:${names.map(escapeRegExp).join("|")})(?:s|es)?`;
-    let cleaned = stripNegations(text, term);
-    if (MILK_STEMS.has(stem)) cleaned = cleaned.replace(PLANT_MILK, " ");
-    if (new RegExp(`\\b${term}\\b`, "i").test(cleaned)) return allergy;
+    const specs = (ALLERGY_KEYS[stem] ?? [stem]).map((key) => ALLERGENS[key] ?? { ...NO_ALLERGEN, key });
+    const generic = specs.map((spec) => spec.key);
+    const aliases = specs.flatMap((spec) => spec.aliases);
+    const words = [...new Set(specs.flatMap((spec) => [spec.key, ...spec.aliases, ...spec.words]))];
+
+    let cleaned = stripNegations(text, generic, aliases);
+    if (generic.includes("dairy")) cleaned = cleaned.replace(DAIRY_LOOKALIKES, " ");
+    for (const word of words) {
+      const pattern = new RegExp(`${WORD_PREFIX[word] ?? ""}\\b${escapeRegExp(word)}(?:s|es)?\\b`, "i");
+      if (pattern.test(cleaned)) return allergy;
+    }
   }
   return undefined;
 }
