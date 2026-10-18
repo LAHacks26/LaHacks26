@@ -15,7 +15,7 @@ export function SignInPrompt() {
           Changes stay on this device until you sign in, then they move into your kitchen.
         </p>
       </div>
-      <Button variant="outline" size="lg" className="h-11 bg-background">
+      <Button variant="outline" size="lg" className="h-11 ps-2 bg-background">
         <LogIn aria-hidden="true" />
         Sign in with Google
       </Button>

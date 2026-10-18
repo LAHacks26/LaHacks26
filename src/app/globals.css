@@ -49,6 +49,8 @@
   --color-sage: var(--sage);
   --color-sage-soft: var(--sage-soft);
   --color-ink: var(--ink);
+  --shadow-border: var(--saffron-shadow-border);
+  --shadow-border-hover: var(--saffron-shadow-border-hover);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -80,6 +82,10 @@
   --input: #E4D9C8;
   --ring: #E39B2D;
   --radius: 0.625rem;
+
+  /* Elevation as a hairline ring plus soft drop, so cards keep their size with a transparent border. */
+  --saffron-shadow-border: 0px 0px 0px 1px oklch(0 0 0 / 0.06), 0px 1px 2px -1px oklch(0 0 0 / 0.06), 0px 2px 4px 0px oklch(0 0 0 / 0.04);
+  --saffron-shadow-border-hover: 0px 0px 0px 1px oklch(0 0 0 / 0.08), 0px 1px 2px -1px oklch(0 0 0 / 0.08), 0px 2px 4px 0px oklch(0 0 0 / 0.06);
 
   /* Saffron extras, exposed to Tailwind via @theme inline (bg-saffron-soft, text-sage, ...) */
   --saffron: #E39B2D;
@@ -117,5 +123,11 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Our controls draw their own pressed state. */
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
   }
 }

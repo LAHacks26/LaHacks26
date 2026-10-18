@@ -11,7 +11,7 @@ export function SearchError({ message }: SearchErrorProps) {
   return (
     <section
       aria-labelledby="search-error-heading"
-      className="mx-auto w-full max-w-xl rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8"
+      className="mx-auto w-full max-w-xl rounded-2xl border border-transparent bg-card p-6 shadow-border sm:p-8"
     >
       <div className="flex items-start gap-4">
         <span

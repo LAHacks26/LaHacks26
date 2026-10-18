@@ -41,7 +41,7 @@ export function SearchBox({ value, onChange, onSubmit }: SearchBoxProps) {
         <button
           type="submit"
           disabled={!value.trim()}
-          className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary ps-4 pe-3.5 text-sm font-semibold text-primary-foreground transition-colors outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
         >
           {isUrl ? "Import recipe" : "Search"}
           <ArrowRight aria-hidden="true" className="size-4" />

@@ -21,7 +21,7 @@ export function SavedRecipeCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm outline-none transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-transparent bg-card shadow-border outline-none transition-[transform,box-shadow] duration-150 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-border-hover focus-visible:ring-3 focus-visible:ring-ring/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <div className="flex aspect-[4/3] items-center justify-center bg-linear-to-br from-saffron-soft via-background to-sage-soft">
         <ChefHat aria-hidden="true" strokeWidth={1.5} className="size-10 text-saffron-ink/70" />

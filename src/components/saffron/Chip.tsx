@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const chipVariants = cva(
-  "inline-flex max-w-full items-center gap-1.5 rounded-full border font-medium whitespace-nowrap transition-colors",
+  "inline-flex max-w-full items-center gap-1.5 rounded-full border font-medium whitespace-nowrap transition-[color,background-color,border-color,scale] duration-150 ease-out",
   {
     variants: {
       variant: {
@@ -17,7 +17,7 @@ const chipVariants = cva(
         md: "px-3 py-1.5 text-sm",
       },
       interactive: {
-        true: "cursor-pointer outline-none hover:border-saffron focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border",
+        true: "cursor-pointer outline-none hover:border-saffron motion-safe:enabled:active:scale-[0.96] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-border",
         false: "",
       },
     },

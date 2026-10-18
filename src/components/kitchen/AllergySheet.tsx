@@ -62,7 +62,7 @@ export function AllergySheet({ open, onOpenChange, selected, onSave }: AllergySh
           <SheetDescription>Saffron flags these in red and never suggests them.</SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-7 overflow-y-auto p-5">
+        <div className="flex flex-1 flex-col gap-7 overflow-y-auto overscroll-contain p-5">
           <fieldset className="flex flex-col gap-3">
             <legend className="mb-3 text-sm font-medium text-ink">Common</legend>
             <div className="flex flex-wrap gap-2">

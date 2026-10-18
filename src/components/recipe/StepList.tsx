@@ -56,7 +56,7 @@ export function StepList({
         const className = cn(
           "flex min-h-11 w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-base leading-relaxed text-foreground",
           interactive
-            ? "cursor-pointer outline-none transition-colors hover:bg-saffron-soft/50 focus-visible:ring-3 focus-visible:ring-ring/50"
+            ? "cursor-pointer outline-none transition-[background-color] duration-150 ease-out hover:bg-saffron-soft/50 focus-visible:ring-3 focus-visible:ring-ring/50"
             : "cursor-default",
           selected && "bg-saffron-soft ring-2 ring-saffron",
           glow && "recipe-glow"

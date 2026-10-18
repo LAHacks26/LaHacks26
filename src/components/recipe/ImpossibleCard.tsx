@@ -17,7 +17,7 @@ export function ImpossibleCard({ reason, suggestedSearch, onSearch, className }:
       <Button
         size="lg"
         onClick={onSearch}
-        className="h-auto min-h-9 w-full justify-start py-2 text-left whitespace-normal"
+        className="h-auto min-h-9 w-full justify-start ps-2 py-2 text-left whitespace-normal"
       >
         <Search aria-hidden="true" />
         <span>Search instead: {suggestedSearch}</span>

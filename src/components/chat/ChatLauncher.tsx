@@ -17,7 +17,7 @@ export function ChatLauncher({ onClick, buttonRef, className }: ChatLauncherProp
       type="button"
       onClick={onClick}
       className={cn(
-        "fixed right-4 bottom-4 z-40 inline-flex h-12 items-center gap-2.5 rounded-full bg-ink px-5 text-sm font-semibold text-background shadow-lg outline-none transition-transform hover:-translate-y-0.5 focus-visible:ring-3 focus-visible:ring-ring/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:right-6 sm:bottom-6",
+        "fixed right-4 bottom-4 z-40 inline-flex h-12 items-center gap-2.5 rounded-full bg-ink px-5 text-sm font-semibold text-background shadow-lg outline-none transition-transform motion-safe:hover:-translate-y-0.5 focus-visible:ring-3 focus-visible:ring-ring/60 motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:right-6 sm:bottom-6",
         className
       )}
     >

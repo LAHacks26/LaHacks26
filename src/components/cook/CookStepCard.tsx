@@ -55,7 +55,7 @@ export function CookStepCard({
         "relative rounded-2xl border transition-colors",
         current
           ? "border-2 border-saffron bg-saffron-soft p-5 shadow-sm sm:p-6"
-          : "border-border bg-card p-4",
+          : "border-transparent bg-card p-4 shadow-border",
         status === "upcoming" && "opacity-55"
       )}
     >

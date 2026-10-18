@@ -39,7 +39,7 @@ export function LiveAgentView({ currentUrl, status }: LiveAgentViewProps) {
       aria-label="Live view of the agent browsing"
       className="mx-auto w-full max-w-3xl"
     >
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-md">
+      <div className="overflow-hidden rounded-2xl border border-transparent bg-card shadow-border">
         {/* Browser chrome */}
         <div className="flex items-center gap-3 border-b border-border bg-secondary px-4 py-2.5">
           <div className="flex shrink-0 items-center gap-1.5" aria-hidden="true">

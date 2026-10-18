@@ -110,7 +110,7 @@ export function ChatPanel({
         ref={listRef}
         role="log"
         aria-label="Conversation"
-        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4"
       >
         {messages.map((message) => (
           <ChatBubble

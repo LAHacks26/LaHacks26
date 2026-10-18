@@ -34,14 +34,14 @@ export function CachedStrip({ items, compact = false }: CachedStripProps) {
             <Link
               href="/mocks/recipe"
               className={cn(
-                "group flex overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-colors outline-none hover:border-saffron focus-visible:ring-3 focus-visible:ring-ring/50",
+                "group flex overflow-hidden rounded-2xl border border-transparent bg-card shadow-border transition-[border-color,box-shadow] duration-150 ease-out outline-none hover:border-saffron hover:shadow-border-hover focus-visible:ring-3 focus-visible:ring-ring/50",
                 compact ? "items-center gap-2.5 p-2 pr-3" : "flex-col"
               )}
             >
               {compact ? (
                 <span
                   aria-hidden="true"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-saffron-soft to-sage-soft"
+                  className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-linear-to-br from-saffron-soft to-sage-soft"
                 >
                   <ChefHat className="size-4 text-saffron-ink/70" />
                 </span>

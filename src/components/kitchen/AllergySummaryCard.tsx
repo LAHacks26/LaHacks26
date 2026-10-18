@@ -11,7 +11,7 @@ export function AllergySummaryCard({ allergies, onEdit }: AllergySummaryCardProp
   return (
     <section
       aria-labelledby="allergy-summary-heading"
-      className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6"
+      className="flex flex-col gap-4 rounded-2xl border border-transparent bg-card p-5 shadow-border sm:flex-row sm:items-center sm:justify-between sm:p-6"
     >
       <div className="flex flex-col gap-3">
         <SectionLabel as="h2" className="text-[11px]">
@@ -30,7 +30,7 @@ export function AllergySummaryCard({ allergies, onEdit }: AllergySummaryCardProp
         )}
       </div>
 
-      <Button variant="outline" size="lg" className="h-11 self-start bg-background sm:self-auto" onClick={onEdit}>
+      <Button variant="outline" size="lg" className="h-11 ps-2 self-start bg-background sm:self-auto" onClick={onEdit}>
         <Pencil aria-hidden="true" />
         Edit
       </Button>

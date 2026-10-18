@@ -31,8 +31,8 @@ export function CandidateCard({
   return (
     <article
       className={cn(
-        "flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm",
-        "transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "flex h-full w-full flex-col overflow-hidden rounded-2xl border border-transparent bg-card shadow-border",
+        "transition-[transform,box-shadow] duration-150 ease-out motion-safe:hover:-translate-y-0.5 hover:shadow-border-hover",
         "motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       )}
     >

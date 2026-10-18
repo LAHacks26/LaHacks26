@@ -168,11 +168,16 @@ export function LinePopover({
         reason={rejection.reason}
         suggestions={rejection.suggestions}
         onSuggest={close}
+        className="rounded-md"
       />
     );
   } else if (mode === "impossible" && impossible) {
     body = (
-      <ImpossibleCard reason={impossible.reason} suggestedSearch={impossible.suggestedSearch} />
+      <ImpossibleCard
+        reason={impossible.reason}
+        suggestedSearch={impossible.suggestedSearch}
+        className="rounded-md"
+      />
     );
   }
 
@@ -183,7 +188,7 @@ export function LinePopover({
         side="bottom"
         align="start"
         sideOffset={8}
-        className="w-[min(22rem,calc(100vw-2rem))] gap-2.5 p-3 text-sm"
+        className="w-[min(22rem,calc(100vw-2rem))] gap-2.5 rounded-[20px] p-3 text-sm"
       >
         <p className="text-sm text-muted-foreground">
           About: <b className="font-semibold text-foreground">{label}</b>
@@ -192,7 +197,7 @@ export function LinePopover({
         <div
           role="group"
           aria-label="Quick actions"
-          className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+          className="grid grid-cols-2 gap-1 rounded-md bg-muted p-1"
         >
           {[first, second].map((action, index) => {
             const pressed = index === current;
@@ -202,7 +207,7 @@ export function LinePopover({
                 type="button"
                 aria-pressed={pressed}
                 className={cn(
-                  "min-h-9 rounded-md px-2 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "min-h-9 rounded-[4px] px-2 text-sm font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   pressed
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
@@ -215,7 +220,7 @@ export function LinePopover({
         </div>
 
         {question ? (
-          <p className="rounded-lg bg-saffron-soft/60 px-3 py-2 text-sm text-saffron-ink">
+          <p className="rounded-md bg-saffron-soft/60 px-3 py-2 text-sm text-saffron-ink">
             “{question}”
           </p>
         ) : null}
