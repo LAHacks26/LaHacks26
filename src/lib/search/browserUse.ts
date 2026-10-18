@@ -1,8 +1,10 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import { MockBrowserUseClient } from "./mockBrowserUse";
 
-// The Browser Use agent (PRD §10 step 3, §13.1). The mock is the default until the key arrives.
-// The real client below is a stub; it is written when BROWSER_USE_API_KEY is set.
+// The Browser Use agent (PRD §10 step 3, §13.1). The mock runs unless BROWSER_USE_MOCK=false and
+// BROWSER_USE_API_KEY is set; then BrowserUseCloudClient drives Browser Use Cloud API v2.
 
 export type AgentStatus = "running" | "finished" | "failed";
 
@@ -50,18 +52,287 @@ export function buildAgentPrompt(dishQuery: string, constraints: string[], maxTo
   return lines.join("\n");
 }
 
-/** The real Browser Use Cloud client. Not written yet: it fails clearly until the key arrives (PRD §13.1). */
-class BrowserUseCloudClient implements BrowserUseClient {
-  async start(): Promise<{ taskId: string; liveUrl: string | null }> {
-    throw new Error("Browser Use is not configured yet.");
+// --- Browser Use Cloud ---
+//
+// Measured on "mango sticky rice" (2026-10-18): one agent hopping across sites took 60–99 s, and it
+// wrote some candidate URLs from memory (Serious Eats links 404'd). So the real client runs one agent
+// per site in parallel, each starting on that site's search results and opening its best match.
+// The slowest finished in 25–34 s, and each candidate URL is the page the browser actually loaded,
+// taken from the step log rather than from the model's text.
+
+type Site = {
+  name: string;
+  host: string;
+  searchUrl: (dish: string) => string;
+  /** Paths of single-recipe pages. Roundups ("mango-recipes-5117647") and other pages don't match. */
+  recipePath: RegExp;
+};
+
+/** Allowlisted sites whose search pages work in the agent and whose recipes our server can fetch. */
+export const AGENT_SITES: Site[] = [
+  { name: "AllRecipes", host: "allrecipes.com", searchUrl: (dish) => `https://www.allrecipes.com/search?q=${encodeURIComponent(dish)}`, recipePath: /^\/recipe\/\d+\// },
+  { name: "BBC Good Food", host: "bbcgoodfood.com", searchUrl: (dish) => `https://www.bbcgoodfood.com/search?q=${encodeURIComponent(dish)}`, recipePath: /^\/recipes\/[^/]+\/?$/ },
+  { name: "Serious Eats", host: "seriouseats.com", searchUrl: (dish) => `https://www.seriouseats.com/search?q=${encodeURIComponent(dish)}`, recipePath: /-recipe(?:-\d+)?\/?$/ },
+];
+
+const API_BASE = "https://api.browser-use.com/api/v2";
+const REQUEST_TIMEOUT_MS = 10_000;
+const LIVE_URL_TIMEOUT_MS = 1_000;
+/** Browser Use's own agent model. Flash mode skips per-step reasoning, which roughly halves a run. */
+const AGENT_LLM = "browser-use-2.0";
+/** Read results, click one, confirm. Two or three steps in practice; the cap bounds a confused agent. */
+const SITE_MAX_STEPS = 5;
+/** A sub-task whose status can't be read this many polls in a row is given up on. */
+const MAX_POLL_ERRORS = 3;
+
+const TITLE_JSON_SCHEMA = JSON.stringify({
+  type: "object",
+  properties: { title: { type: "string" } },
+  required: ["title"],
+});
+
+const SITE_NAMES: Record<string, string> = Object.fromEntries([
+  ...AGENT_SITES.map((site) => [site.host, site.name]),
+  ["budgetbytes.com", "Budget Bytes"],
+  ["simplyrecipes.com", "Simply Recipes"],
+  ["foodnetwork.com", "Food Network"],
+]);
+
+const TaskViewSchema = z.object({
+  status: z.string(),
+  output: z.string().nullish(),
+  steps: z
+    .array(z.object({ nextGoal: z.string().nullish(), url: z.string().nullish() }))
+    .default([]),
+});
+const SessionViewSchema = z.object({ liveUrl: z.string().nullish() });
+const TitleSchema = z.object({ title: z.string() });
+
+/** One site agent's task: open the search result that best matches the dish, then stop. */
+export function buildSitePrompt(site: string, opts: Pick<StartOptions, "dishQuery" | "constraints" | "maxTotalMin">): string {
+  const lines = [
+    `You are on ${site}'s search results for ${JSON.stringify(opts.dishQuery)}.`,
+    "Click the result that best matches the dish. It must be one single recipe, not a list, a roundup, a video or a collection.",
+  ];
+  if (opts.constraints.length > 0) {
+    lines.push(`It must meet every limit: ${opts.constraints.join(", ")}. For example, "Dairy-free" means no butter, milk, cheese or cream, and "No oven" means no baking.`);
+  }
+  if (opts.maxTotalMin !== undefined) lines.push(`Prefer one that takes at most ${opts.maxTotalMin} minutes in total.`);
+  lines.push(
+    "As soon as that recipe page has loaded, stop and return its title. Do not open anything else.",
+    "If no result fits, return an empty title.",
+  );
+  return lines.join("\n");
+}
+
+function hostOf(url: string | null | undefined): string | null {
+  try {
+    return new URL(url ?? "").hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+const isSearchPage = (url: URL) => /search/i.test(url.pathname) || url.searchParams.has("q");
+
+/** "Searching AllRecipes…" or "Reading Serious Eats: thai coconut sticky rice mango…" from a step's page. */
+export function describeStep(step: { nextGoal?: string | null; url?: string | null }): string {
+  const goal = step.nextGoal?.trim();
+  if (goal) return goal.length > 100 ? `${goal.slice(0, 99)}…` : goal;
+  let url: URL;
+  try {
+    url = new URL(step.url ?? "");
+  } catch {
+    return "Browsing…";
+  }
+  const host = url.hostname.replace(/^www\./, "");
+  const site = SITE_NAMES[host] ?? host;
+  if (isSearchPage(url)) return `Searching ${site}…`;
+  const slug = url.pathname.split("/").filter((part) => part && !/^\d+$/.test(part)).at(-1);
+  const words = slug?.replace(/\.html?$/, "").replace(/[-_]+/g, " ").replace(/\brecipes?\b/gi, "").replace(/\s+/g, " ").trim();
+  if (!words) return `Opening ${site}…`;
+  const short = words.length > 50 ? words.slice(0, 51).replace(/\s+\S*$/, "") : words;
+  return `Reading ${site}: ${short}…`;
+}
+
+/**
+ * The recipe a finished site agent chose: the last page it loaded on that site, preferring pages
+ * shaped like a single recipe over other non-search pages. The URL comes from the browser, so it is
+ * real; the title comes from the agent's output. An explicit empty title means "nothing fits".
+ */
+export function candidateFromRun(
+  site: Pick<Site, "host" | "recipePath">,
+  view: { output?: string | null; steps: { url?: string | null }[] },
+): AgentCandidate | null {
+  let recipe: string | null = null;
+  let other: string | null = null;
+  for (const step of view.steps) {
+    if (hostOf(step.url) !== site.host) continue;
+    const parsed = new URL(step.url!);
+    if (isSearchPage(parsed) || parsed.pathname.length <= 1) continue;
+    if (site.recipePath.test(parsed.pathname)) recipe = parsed.toString();
+    else other = parsed.toString();
+  }
+  const url = recipe ?? other;
+  if (!url) return null;
+
+  let title: string | null = null;
+  try {
+    title = TitleSchema.parse(JSON.parse(view.output ?? "")).title.trim();
+  } catch {
+    // No usable output: the recipe import reads the real title from the page.
+  }
+  if (title === "") return null;
+  return { url, title: title ?? describeStep({ url }).replace(/^Reading [^:]+: |…$/g, "") };
+}
+
+type SiteTask = {
+  site: Site;
+  taskId: string;
+  sessionId: string;
+  done: boolean;
+  /** How many of this agent's described steps are already in the run log. */
+  logged: number;
+  errors: number;
+  candidate: AgentCandidate | null;
+};
+
+type SiteRun = { tasks: SiteTask[]; log: string[] };
+
+/** Browser Use Cloud API v2 (docs.browser-use.com/cloud/api-v2-overview). One run = one agent per site. */
+export class BrowserUseCloudClient implements BrowserUseClient {
+  private readonly runs = new Map<string, SiteRun>();
+
+  constructor(
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch,
+  ) {}
+
+  /** `prompt` is the single-agent prompt for the mock; the site agents get buildSitePrompt instead. */
+  async start(_prompt: string, opts: StartOptions): Promise<{ taskId: string; liveUrl: string | null }> {
+    const started = await Promise.all(
+      AGENT_SITES.map(async (site): Promise<SiteTask | null> => {
+        try {
+          const created = z.object({ id: z.string(), sessionId: z.string() }).parse(
+            await this.request("POST", "/tasks", {
+              task: buildSitePrompt(site.name, opts),
+              llm: AGENT_LLM,
+              maxSteps: SITE_MAX_STEPS,
+              flashMode: true,
+              startUrl: site.searchUrl(opts.dishQuery),
+              structuredOutput: TITLE_JSON_SCHEMA,
+            }),
+          );
+          return { site, taskId: created.id, sessionId: created.sessionId, done: false, logged: 0, errors: 0, candidate: null };
+        } catch {
+          // One site failing to start (e.g. the concurrency limit) still leaves the others.
+          return null;
+        }
+      }),
+    );
+    const tasks = started.filter((task): task is SiteTask => task !== null);
+    if (tasks.length === 0) throw new Error("Browser Use could not start any agent");
+
+    const runId = randomUUID();
+    const names = tasks.map((task) => task.site.name);
+    const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+    this.runs.set(runId, { tasks, log: [`Sending agents to ${list}…`] });
+    // The page shows one live view: the first site's browser.
+    return { taskId: runId, liveUrl: await this.liveUrl(tasks[0]!.sessionId) };
   }
 
-  async poll(): Promise<AgentPoll> {
-    throw new Error("Browser Use is not configured yet.");
+  async poll(runId: string): Promise<AgentPoll> {
+    const run = this.runs.get(runId);
+    if (!run) throw new Error("Unknown Browser Use run");
+    await Promise.all(run.tasks.filter((task) => !task.done).map((task) => this.pollTask(run, task)));
+    if (run.tasks.some((task) => !task.done)) return { status: "running", steps: [...run.log] };
+
+    this.runs.delete(runId);
+    this.stopSession(run.tasks[0]!);
+    const candidates = run.tasks.flatMap((task) => (task.candidate ? [task.candidate] : []));
+    return { status: "finished", steps: [...run.log], candidates };
   }
 
-  async cancel(): Promise<void> {
-    throw new Error("Browser Use is not configured yet.");
+  async cancel(runId: string): Promise<void> {
+    const run = this.runs.get(runId);
+    if (!run) return;
+    this.runs.delete(runId);
+    await Promise.all(
+      run.tasks.map((task) =>
+        this.request("PATCH", `/tasks/${encodeURIComponent(task.taskId)}`, { action: "stop_task_and_session" }).catch(() => undefined),
+      ),
+    );
+  }
+
+  private async pollTask(run: SiteRun, task: SiteTask): Promise<void> {
+    let view: z.infer<typeof TaskViewSchema>;
+    try {
+      view = TaskViewSchema.parse(await this.request("GET", `/tasks/${encodeURIComponent(task.taskId)}`));
+      task.errors = 0;
+    } catch {
+      if (++task.errors >= MAX_POLL_ERRORS) this.finishTask(task, null, task === run.tasks[0]);
+      return;
+    }
+    // Append this agent's new steps, so the combined log only ever grows.
+    const described: string[] = [];
+    for (const step of view.steps) {
+      const text = describeStep(step);
+      if (described.at(-1) !== text) described.push(text);
+    }
+    run.log.push(...described.slice(task.logged));
+    task.logged = Math.max(task.logged, described.length);
+
+    if (view.status === "created" || view.status === "started") return;
+    this.finishTask(task, view.status === "finished" ? candidateFromRun(task.site, view) : null, task === run.tasks[0]);
+  }
+
+  /**
+   * Records the result and stops the browser, which can otherwise stay up (and billed) for a while.
+   * The first site's browser is the page's live view, so it keeps running until the whole run ends.
+   */
+  private finishTask(task: SiteTask, candidate: AgentCandidate | null, live: boolean): void {
+    task.done = true;
+    task.candidate = candidate;
+    if (!live) this.stopSession(task);
+  }
+
+  private stopSession(task: SiteTask): void {
+    void this.request("PATCH", `/sessions/${encodeURIComponent(task.sessionId)}`, { action: "stop" }).catch(() => undefined);
+  }
+
+  /**
+   * The live view, read-only so viewers can't drive the agent's browser. Null if it isn't ready yet.
+   * The agents are already running, so this waits briefly (at most ~4.5 s) rather than hold up the page.
+   */
+  private async liveUrl(sessionId: string): Promise<string | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const session = SessionViewSchema.parse(
+          await this.request("GET", `/sessions/${encodeURIComponent(sessionId)}`, undefined, LIVE_URL_TIMEOUT_MS),
+        );
+        if (session.liveUrl) {
+          const url = new URL(session.liveUrl);
+          url.searchParams.set("readOnly", "true");
+          return url.toString();
+        }
+      } catch {
+        // The search works without a live view; the page shows its placeholder.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return null;
+  }
+
+  /** One API call. Errors carry the method, resource and status only, never the key or response body. */
+  private async request(method: string, path: string, body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<unknown> {
+    const response = await this.fetchImpl(`${API_BASE}${path}`, {
+      method,
+      headers: { "X-Browser-Use-API-Key": this.apiKey, ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) throw new Error(`Browser Use ${method} ${path.split("/")[1]} failed: HTTP ${response.status}`);
+    return response.json();
   }
 }
 
@@ -70,13 +341,13 @@ function isRealClientConfigured(): boolean {
   return process.env.BROWSER_USE_MOCK === "false" && Boolean(process.env.BROWSER_USE_API_KEY);
 }
 
-// One client per process. Cached on globalThis so dev hot reloads keep the mock's task state.
+// One client per process. Cached on globalThis so dev hot reloads keep in-flight task state.
 const globalForBrowserUse = globalThis as unknown as { __saffronBrowserUse?: BrowserUseClient };
 
 export function getBrowserUseClient(): BrowserUseClient {
   if (!globalForBrowserUse.__saffronBrowserUse) {
     globalForBrowserUse.__saffronBrowserUse = isRealClientConfigured()
-      ? new BrowserUseCloudClient()
+      ? new BrowserUseCloudClient(process.env.BROWSER_USE_API_KEY!)
       : new MockBrowserUseClient();
   }
   return globalForBrowserUse.__saffronBrowserUse;

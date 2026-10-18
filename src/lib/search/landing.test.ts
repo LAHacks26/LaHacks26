@@ -43,6 +43,13 @@ describe("landing submission", () => {
     expect(url.searchParams.get("readyBy")).toBe(new Date(2026, 9, 18, 19, 30).toISOString());
   });
 
+  it("imports a link typed without https:// instead of searching for it", async () => {
+    fetchMock.mockResolvedValue(Response.json({ sourceRecipeId: "recipe-123" }));
+    await landingDestination({ ...input, query: "  www.bbcgoodfood.com/recipes/sticky-rice-mango " }, new AbortController().signal, now);
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/import");
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toEqual({ url: "https://www.bbcgoodfood.com/recipes/sticky-rice-mango" });
+  });
+
   it("surfaces API errors so the form can retry without navigating to a mock", async () => {
     fetchMock.mockResolvedValue(Response.json({ error: "Try again shortly." }, { status: 429 }));
     await expect(landingDestination(input, new AbortController().signal, now)).rejects.toThrow("Try again shortly.");

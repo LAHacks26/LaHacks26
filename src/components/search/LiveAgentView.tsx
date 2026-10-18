@@ -48,14 +48,25 @@ function httpsUrlOrNull(value: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Host and path for the fake address bar. The query is dropped: a Browser Use live URL carries the
+ * browser's CDP endpoint there, which shouldn't be shown on screen (or on a projector).
+ */
+export function displayAddress(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
+  } catch {
+    return value.replace(/^https?:\/\//, "").split(/[?#]/)[0] ?? "";
+  }
+}
+
 export function LiveAgentView({ currentUrl, status, frameUrl }: LiveAgentViewProps) {
   const reduceMotion = useReducedMotion();
   const cursorMoves = !reduceMotion && status !== "done";
   const safeFrameUrl = httpsUrlOrNull(frameUrl);
   const safeLinkUrl = httpsUrlOrNull(currentUrl);
-  const displayUrl = currentUrl
-    ? currentUrl.replace(/^https?:\/\//, "")
-    : "Starting the browser…";
+  const displayUrl = currentUrl ? displayAddress(currentUrl) : "Starting the browser…";
 
   return (
     <section

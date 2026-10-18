@@ -1,4 +1,4 @@
-import { isRecipeUrl } from "../mocks/search";
+import { recipeUrlFrom } from "../mocks/search";
 import { readyByFromClock, recipeHref } from "../recipe/readyBy";
 import { importRecipeLink, SearchClientError, startSearch } from "./client";
 
@@ -15,8 +15,9 @@ export async function landingDestination(
     throw new SearchClientError("Choose a valid ready-by time, or clear it.");
   }
   const text = input.query.trim();
-  if (isRecipeUrl(text)) {
-    const id = await importRecipeLink(text, signal);
+  const link = recipeUrlFrom(text);
+  if (link) {
+    const id = await importRecipeLink(link, signal);
     return recipeHref(id, readyBy);
   }
   const id = await startSearch({ text, constraints: input.constraints, readyBy, allergies: input.allergies }, signal);

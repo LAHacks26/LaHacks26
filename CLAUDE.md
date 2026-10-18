@@ -28,7 +28,8 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - **zod v4** for shared schemas. `src/lib/recipe/schema.ts` is the frozen contract between frontend and backend: do not change it inside a builder task; ask the orchestrator.
 - **Zustand** for client state.
 - **Postgres on Tiger Cloud** with pgvector. Drizzle ORM and the `postgres` driver live in `src/lib/db/`; migrations go in `drizzle/`.
-- **Gemini** via `@google/genai`. **Browser Use Cloud** and **ElevenLabs** are stubbed until their keys arrive (PRD §13.1).
+- **Gemini** via `@google/genai`. **Browser Use Cloud** is real (API v2, `src/lib/search/browserUse.ts`) when `BROWSER_USE_MOCK=false` and a key is set; **ElevenLabs** is still stubbed (PRD §13.1).
+- **Never trust URLs an agent writes.** Browser Use agents invent plausible recipe URLs that 404 when they don't open the page. Take candidate URLs from the step log (pages the browser actually loaded), and run one short agent per site in parallel: it is faster than one agent hopping across sites.
 - **MVP ownership:** anonymous HttpOnly device cookie (approved 2026-10-18). Google/Auth.js account linking is deferred. See `docs/ANONYMOUS_SAVES.md` for access, recovery, sharing and configuration limits.
 - **Tests:** vitest. **Hosting:** Vultr VM with pm2 and Caddy. The build needs dev dependencies (Tailwind, shadcn CSS), so deploys run a full `npm ci`, never `--omit=dev`.
 - **No CSS modules.** `next.config.ts` routes every `*.css` file through `@tailwindcss/turbopack` as global CSS, so `*.module.css` class imports are `undefined` and fail silently. Use Tailwind classes, or a plain `.css` file with prefixed class names (e.g. `.recipe-glow`) imported once by a client component.
@@ -71,7 +72,7 @@ Treat the configured DATABASE_URL as potentially production until verified. Brow
 - Run parallel agents only on disjoint files (frontend / backend / db). 3–5 at once max.
 - For isolation use worktrees; worktrees don't share `.env` or `node_modules`, so copy the env file and run install in each. Merge branches one at a time.
 - Agent worktrees (`isolation: "worktree"`) start from `main`, NOT from your current branch. Before spawning them, make sure everything they depend on is on `main`, or merge your branch into each worktree (`git -C <worktree> merge <branch>`) right after spawning. Otherwise builders recreate missing shared files.
-- Parallel builders must not run `next build` or `next dev` in the same folder; they clobber `.next`. Use separate worktrees, or have only one agent build at a time.
+- Parallel builders must not run two `next build`s, or two `next dev`s, in the same folder; they clobber their output. Use separate worktrees, or have only one agent build at a time. (One `next dev` alongside one `next build` is fine in Next 16: dev writes to `.next/dev`.)
 
 ## Git rules
 - Commit after each working sub-task.
