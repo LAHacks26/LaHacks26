@@ -87,8 +87,9 @@ describe("containsAllergen", () => {
 
   it("does not match a word that only starts with the allergy", () => {
     expect(containsAllergen("eggplant", ["egg"])).toBeUndefined();
-    expect(containsAllergen("walnut", ["nuts"])).toBeUndefined();
+    expect(containsAllergen("walnutty", ["nuts"])).toBeUndefined();
     expect(containsAllergen("nutmeg", ["nuts"])).toBeUndefined();
+    expect(containsAllergen("walnut", ["nuts"])).toBe("nuts");
   });
 
   it("ignores blank and very short allergy entries", () => {

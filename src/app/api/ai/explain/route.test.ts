@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as Sentry from "@sentry/nextjs";
 import { butterChicken } from "@/lib/recipe/fixtures/butterChicken";
 
 vi.mock("server-only", () => ({}));
+
+vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
 
 const mocks = vi.hoisted(() => ({ streamExplain: vi.fn() }));
 
@@ -100,5 +103,33 @@ describe("POST /api/ai/explain", () => {
 
     expect(res.status).toBe(400);
     expect(mocks.streamExplain).not.toHaveBeenCalled();
+  });
+
+  it("stops the model and skips the log and Sentry when the reader cancels mid-stream", async () => {
+    vi.mocked(Sentry.captureException).mockClear();
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    let finallyRan = false;
+    mocks.streamExplain.mockImplementation(async function* (_req: unknown, options: { signal: AbortSignal }) {
+      try {
+        yield "Part one. ";
+        // Waits until the route aborts the request, then fails the way a cancelled fetch does.
+        await new Promise<never>((_, reject) => {
+          options.signal.addEventListener("abort", () => reject(new Error("The operation was aborted")));
+        });
+      } finally {
+        finallyRan = true;
+      }
+    });
+
+    const res = await POST(post());
+    const reader = res.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("Part one. ");
+
+    await reader.cancel();
+
+    await vi.waitFor(() => expect(finallyRan).toBe(true));
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(errorLog).not.toHaveBeenCalled();
+    errorLog.mockRestore();
   });
 });
