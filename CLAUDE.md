@@ -13,6 +13,8 @@ Update this file after every mistake an agent makes so it doesn't repeat.
 - **Auth.js v5** (Google), added in phase 5.
 - **Tests:** vitest. **Hosting:** Vultr VM with pm2 and Caddy. The build needs dev dependencies (Tailwind, shadcn CSS), so deploys run a full `npm ci`, never `--omit=dev`.
 - **No CSS modules.** `next.config.ts` routes every `*.css` file through `@tailwindcss/turbopack` as global CSS, so `*.module.css` class imports are `undefined` and fail silently. Use Tailwind classes, or a plain `.css` file with prefixed class names (e.g. `.recipe-glow`) imported once by a client component.
+- **Fetch recipe pages with `fetchPage` (curl), never Node `fetch`.** Cloudflare-fronted recipe sites (Allrecipes, Serious Eats, Budget Bytes) return 403 to Node's TLS fingerprint but 200 to curl. Don't add `--compressed`; Budget Bytes 403s with it. `src/lib/ingest/fetchPage.ts` also holds the SSRF guard, so every server-side fetch of a user-supplied URL goes through it.
+- **Gemini free tier is 5 requests/min** on `gemini-3.6-flash`. Don't fire Gemini calls in tight loops (seed scripts, tests); space them out or expect 429s.
 - **Next.js 16.4 differs from most training data.** Read the relevant guide in `node_modules/next/dist/docs/` before using an unfamiliar Next API (see `AGENTS.md`). Cache Components is deliberately OFF in `next.config.ts`; do not turn it on.
 
 ## Commands
