@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "motion/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Recipe, Step } from "@/lib/recipe/schema";
@@ -44,6 +45,20 @@ export function CookModeView({
     }));
   });
   const [voice, setVoice] = useState<WakeState>(initialVoice);
+  const reduce = useReducedMotion();
+  const listRef = useRef<HTMLOListElement>(null);
+  const lastCurrentId = useRef(currentId);
+
+  // Keep the new current step in view. The first mount is skipped (the ref starts
+  // at the initial id), so the page does not scroll on load.
+  useEffect(() => {
+    if (lastCurrentId.current === currentId) return;
+    lastCurrentId.current = currentId;
+    const card = listRef.current
+      ?.querySelector<HTMLElement>('[aria-current="step"]')
+      ?.closest("li");
+    card?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  }, [currentId, reduce]);
 
   function focusStep(id: string) {
     setCurrentId(id);
@@ -90,7 +105,7 @@ export function CookModeView({
         </div>
       </header>
 
-      <ol aria-label="Recipe steps" className="flex flex-col gap-3">
+      <ol ref={listRef} aria-label="Recipe steps" className="flex flex-col gap-3">
         {recipe.steps.map((step, index) => {
           const status: CookStepStatus = doneIds.has(step.id)
             ? "done"

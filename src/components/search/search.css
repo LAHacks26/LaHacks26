@@ -1,0 +1,60 @@
+/* Entrance animations for the search screens (Turbopack treats every .css as global).
+   Only opacity, transform and filter animate. The hidden state lives in the `from`
+   keyframe with fill-mode both, so content is never stuck invisible.
+   The `to` keyframes use `none` (not an identity value) so no containing block
+   is left behind after the animation. Reduced motion keeps the opacity fade. */
+
+/* Landing hero chunks: 300ms, strong ease-out, 100ms stagger set inline. */
+.search-hero-enter {
+  animation: search-hero-enter 300ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes search-hero-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* Candidate cards: 300ms, strong ease-out, 50ms stagger set inline. */
+.search-card-enter {
+  animation: search-card-enter 300ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes search-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Agent step log: opacity only, 150ms. Steps arrive often, so no movement. */
+.search-step-enter {
+  animation: search-fade-in 150ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes search-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .search-hero-enter,
+  .search-card-enter {
+    animation-name: search-fade-in;
+  }
+}

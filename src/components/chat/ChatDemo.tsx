@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence } from "motion/react";
 import { ChatLauncher } from "./ChatLauncher";
 import { ChatPanel, type ChatMessage, type ContextChip } from "./ChatPanel";
 
@@ -55,23 +56,32 @@ export function ChatDemo({
     }, 1200);
   }
 
-  if (!open) {
-    return <ChatLauncher buttonRef={launcherRef} onClick={() => setOpen(true)} />;
-  }
-
+  // initial={false}: the launcher or panel present at mount does not animate.
+  // Later swaps animate: the panel exits while the launcher enters.
   return (
-    <ChatPanel
-      messages={messages}
-      contextChips={chips}
-      onSend={send}
-      onClose={() => {
-        returnFocusOnClose.current = true;
-        setOpen(false);
-      }}
-      onRemoveChip={(id) => setChips((prev) => prev.filter((chip) => chip.id !== id))}
-      onUndo={() => addMessage("assistant", "Undone. The recipe is back to the original.")}
-      onSearch={(query) => addMessage("assistant", `Searching for “${query}”.`)}
-      typing={pending}
-    />
+    <AnimatePresence initial={false}>
+      {open ? (
+        <ChatPanel
+          key="chat-panel"
+          messages={messages}
+          contextChips={chips}
+          onSend={send}
+          onClose={() => {
+            returnFocusOnClose.current = true;
+            setOpen(false);
+          }}
+          onRemoveChip={(id) => setChips((prev) => prev.filter((chip) => chip.id !== id))}
+          onUndo={() => addMessage("assistant", "Undone. The recipe is back to the original.")}
+          onSearch={(query) => addMessage("assistant", `Searching for “${query}”.`)}
+          typing={pending}
+        />
+      ) : (
+        <ChatLauncher
+          key="chat-launcher"
+          buttonRef={launcherRef}
+          onClick={() => setOpen(true)}
+        />
+      )}
+    </AnimatePresence>
   );
 }

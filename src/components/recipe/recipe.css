@@ -23,3 +23,23 @@
     background-color: var(--saffron-soft);
   }
 }
+
+/* Undo toast: slides up from below over 400ms with the keyword `ease`, a softer
+   curve like Sonner. @starting-style supplies the hidden state for the first frame,
+   so the transition runs on mount. Reduced motion keeps the opacity fade only. */
+.recipe-toast {
+  transition: opacity 400ms ease, transform 400ms ease;
+}
+
+@starting-style {
+  .recipe-toast {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-toast {
+    transition-property: opacity;
+  }
+}

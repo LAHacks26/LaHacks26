@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { AnimatePresence, motion, type TargetAndTransition } from "motion/react";
 import { Check, Search, Send, X } from "lucide-react";
 import { Chip } from "@/components/saffron";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EASE_DRAWER, EASE_OUT, useSafeReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 export type ChatAttachment =
@@ -38,6 +40,22 @@ export type ChatPanelProps = {
   typing?: boolean;
 };
 
+const DESKTOP_QUERY = "(min-width: 640px)";
+
+function subscribeDesktop(onChange: () => void) {
+  const query = window.matchMedia(DESKTOP_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isDesktop() {
+  return window.matchMedia(DESKTOP_QUERY).matches;
+}
+
+function serverIsDesktop() {
+  return true;
+}
+
 export function ChatPanel({
   messages,
   contextChips,
@@ -51,6 +69,56 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const reduce = useSafeReducedMotion();
+  // Read on the first client render, so a panel opened after hydration starts with
+  // the right variant (no flash of the desktop grow). The server snapshot is desktop.
+  const desktop = useSyncExternalStore(subscribeDesktop, isDesktop, serverIsDesktop);
+
+  // Desktop grows from the launcher (bottom right). Mobile slides up as a drawer.
+  // Reduced motion keeps the opacity fade only. Every variant uses the same
+  // transform function list, so switching variants never interpolates across lists.
+  const panelMotion: { initial: TargetAndTransition; animate: TargetAndTransition; exit: TargetAndTransition } =
+    reduce
+      ? {
+          initial: { opacity: 0 },
+          animate: { opacity: 1, transition: { duration: 0.15, ease: EASE_OUT } },
+          exit: { opacity: 0, pointerEvents: "none" as const, transition: { duration: 0.15, ease: EASE_OUT } },
+        }
+      : desktop
+        ? {
+            initial: { opacity: 0, transform: "translateY(0%) scale(0.95)" },
+            animate: {
+              opacity: 1,
+              transform: "translateY(0%) scale(1)",
+              transition: { duration: 0.2, ease: EASE_OUT },
+            },
+            exit: {
+              opacity: 0,
+              transform: "translateY(0%) scale(0.95)",
+              pointerEvents: "none" as const,
+              transition: { duration: 0.15, ease: EASE_OUT },
+            },
+          }
+        : {
+            initial: { transform: "translateY(100%) scale(1)" },
+            animate: {
+              transform: "translateY(0%) scale(1)",
+              transition: { duration: 0.5, ease: EASE_DRAWER },
+            },
+            exit: {
+              transform: "translateY(100%) scale(1)",
+              pointerEvents: "none" as const,
+              transition: { duration: 0.5, ease: EASE_DRAWER },
+            },
+          };
+
+  // New messages rise in. Reduced motion keeps the fade.
+  const bubbleMotion: { initial: TargetAndTransition; animate: TargetAndTransition } = reduce
+    ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
+    : {
+        initial: { opacity: 0, transform: "translateY(8px)" },
+        animate: { opacity: 1, transform: "translateY(0px)" },
+      };
 
   // Focus the message input when the panel opens.
   useEffect(() => {
@@ -90,10 +158,14 @@ export function ChatPanel({
   }
 
   return (
-    <section
+    <motion.section
       role="dialog"
       aria-modal="true"
       aria-label="Ask Saffron"
+      initial={panelMotion.initial}
+      animate={panelMotion.animate}
+      exit={panelMotion.exit}
+      style={{ transformOrigin: "bottom right" }}
       className="fixed inset-0 z-50 flex flex-col bg-card sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[600px] sm:max-h-[calc(100dvh-3rem)] sm:w-[400px] sm:overflow-hidden sm:rounded-2xl sm:border sm:border-border sm:shadow-xl"
     >
       <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
@@ -112,15 +184,32 @@ export function ChatPanel({
         aria-label="Conversation"
         className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4"
       >
-        {messages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            onUndo={onUndo}
-            onSearch={onSearch}
-          />
-        ))}
-        {typing ? <TypingIndicator /> : null}
+        {/* initial={false}: messages present at first render do not animate. */}
+        <AnimatePresence initial={false}>
+          {messages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={bubbleMotion.initial}
+              animate={bubbleMotion.animate}
+              transition={{ duration: 0.2, ease: EASE_OUT }}
+            >
+              <ChatBubble message={message} onUndo={onUndo} onSearch={onSearch} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        <AnimatePresence>
+          {typing ? (
+            <motion.div
+              key="typing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: EASE_OUT }}
+            >
+              <TypingIndicator />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
 
       {contextChips.length > 0 ? (
@@ -163,7 +252,7 @@ export function ChatPanel({
           <Send aria-hidden="true" />
         </Button>
       </form>
-    </section>
+    </motion.section>
   );
 }
 

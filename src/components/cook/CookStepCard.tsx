@@ -6,6 +6,7 @@ import { TimerChip } from "@/components/saffron";
 import { Button } from "@/components/ui/button";
 import type { Step } from "@/lib/recipe/schema";
 import { cn } from "@/lib/utils";
+import { EASE_IN_OUT } from "@/lib/motion";
 import { type CookTimer, formatClock, useNow } from "./TimerTray";
 
 export type CookStepStatus = "upcoming" | "current" | "done";
@@ -50,7 +51,7 @@ export function CookStepCard({
   return (
     <motion.li
       layout={!reduce}
-      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      transition={{ duration: 0.3, ease: EASE_IN_OUT }}
       className={cn(
         "relative rounded-2xl border transition-colors",
         current

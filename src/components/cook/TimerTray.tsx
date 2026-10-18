@@ -92,7 +92,7 @@ export function TimerTray({ timers, onCancel, className }: TimerTrayProps) {
               className={cn(
                 "flex min-h-11 items-center gap-1 rounded-full py-1 pr-1 pl-4 text-sm font-medium tabular-nums shadow-md",
                 finished
-                  ? "animate-pulse bg-saffron text-ink motion-reduce:animate-none"
+                  ? "animate-pulse [animation-iteration-count:3] bg-saffron text-ink motion-reduce:animate-none"
                   : "bg-ink text-background"
               )}
             >

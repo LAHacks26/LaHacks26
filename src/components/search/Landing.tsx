@@ -6,6 +6,7 @@ import { Chip } from "@/components/saffron";
 import { isRecipeUrl } from "@/lib/mocks/search";
 import { ConstraintChips } from "./ConstraintChips";
 import { SearchBox } from "./SearchBox";
+import "./search.css";
 
 const EXAMPLES = [
   "butter chicken",
@@ -42,26 +43,34 @@ export function Landing() {
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col items-center gap-8 px-4 py-16 text-center sm:py-24">
       <div className="flex flex-col items-center gap-3">
-        <h1 className="font-display text-[2rem] leading-tight font-semibold tracking-tight text-ink sm:text-[2.75rem]">
+        <h1
+          className="search-hero-enter font-display text-[2rem] leading-tight font-semibold tracking-tight text-ink sm:text-[2.75rem]"
+          style={{ animationDelay: "0ms" }}
+        >
           What do you want to cook?
         </h1>
-        <p className="text-muted-foreground">
+        <p className="search-hero-enter text-muted-foreground" style={{ animationDelay: "100ms" }}>
           Find a recipe, then click any line to ask, swap or adapt it.
         </p>
       </div>
 
-      <div className="w-full">
+      <div className="search-hero-enter w-full" style={{ animationDelay: "200ms" }}>
         <SearchBox value={query} onChange={setQuery} onSubmit={submit} />
       </div>
 
-      <ConstraintChips
-        selected={constraints}
-        onToggle={toggleConstraint}
-        readyBy={readyBy}
-        onReadyByChange={setReadyBy}
-      />
+      <div className="search-hero-enter flex w-full justify-center" style={{ animationDelay: "300ms" }}>
+        <ConstraintChips
+          selected={constraints}
+          onToggle={toggleConstraint}
+          readyBy={readyBy}
+          onReadyByChange={setReadyBy}
+        />
+      </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      <div
+        className="search-hero-enter flex flex-wrap items-center justify-center gap-2"
+        style={{ animationDelay: "400ms" }}
+      >
         <span className="text-sm text-muted-foreground">Try:</span>
         {EXAMPLES.map((example) => (
           <Chip

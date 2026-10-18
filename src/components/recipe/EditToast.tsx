@@ -13,7 +13,7 @@ export function EditToast({ summary, linesChanged, onUndo, className }: EditToas
     <div
       role="status"
       className={cn(
-        "fixed bottom-4 left-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-4 rounded-xl bg-ink px-4 py-3 text-sm text-background shadow-lg",
+        "recipe-toast fixed bottom-4 left-4 z-40 flex max-w-[calc(100vw-2rem)] items-center gap-4 rounded-xl bg-ink px-4 py-3 text-sm text-background shadow-lg",
         className
       )}
     >

@@ -49,6 +49,10 @@
   --color-sage: var(--sage);
   --color-sage-soft: var(--sage-soft);
   --color-ink: var(--ink);
+  /* Strong motion curves. Motion code uses the same arrays (src/lib/motion.ts). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --shadow-border: var(--saffron-shadow-border);
   --shadow-border-hover: var(--saffron-shadow-border-hover);
   --radius-sm: calc(var(--radius) * 0.6);

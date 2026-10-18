@@ -1,6 +1,9 @@
+"use client";
+
 import { Check } from "lucide-react";
 import { SectionLabel } from "@/components/saffron";
 import type { AgentStep } from "@/lib/mocks/search";
+import "./search.css";
 
 export type AgentStepLogProps = {
   steps: AgentStep[];
@@ -16,7 +19,7 @@ export function AgentStepLog({ steps }: AgentStepLogProps) {
         {steps.map((step, index) => {
           const done = step.status === "done";
           return (
-            <li key={index} className="flex items-start gap-3 text-sm">
+            <li key={index} className="search-step-enter flex items-start gap-3 text-sm">
               <span className="flex h-5 w-4 shrink-0 items-center justify-center">
                 {done ? (
                   <Check aria-hidden="true" className="size-4 text-sage" />

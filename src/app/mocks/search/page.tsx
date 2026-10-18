@@ -84,7 +84,7 @@ export default async function SearchMockPage({
             {mockSearch.candidates.length} recipes ready by {readyByLabel}
           </h2>
           <ul className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {mockSearch.candidates.map((candidate) => (
+            {mockSearch.candidates.map((candidate, index) => (
               <li key={candidate.id} className="flex">
                 <CandidateCard
                   title={candidate.title}
@@ -94,6 +94,7 @@ export default async function SearchMockPage({
                   allergens={candidate.allergens}
                   userAllergies={mockSearch.userAllergies}
                   fitsReadyBy={candidate.fitsReadyBy}
+                  entranceIndex={index}
                 />
               </li>
             ))}
