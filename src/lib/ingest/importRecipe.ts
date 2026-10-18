@@ -13,23 +13,40 @@ import { extractJsonLdRecipe, extractPageText, extractSiteName } from "./jsonld"
 
 export type ImportResult = { sourceRecipeId: string; cached: boolean };
 
+/** Basic facts from the page's JSON-LD, emitted before Gemini normalization (search uses them for cards). */
+export type ParsedInfo = {
+  url: string;
+  title?: string;
+  siteName: string;
+  imageUrl?: string;
+  totalMin?: number;
+};
+
+/**
+ * Optional callbacks for one import. `onParsed` runs after JSON-LD is read and before normalization.
+ * Throwing from it aborts the import before any Gemini call (search uses this for "too long").
+ */
+export type ImportHooks = {
+  onParsed?(info: ParsedInfo): void;
+};
+
 // Concurrent imports of the same URL share one run, so they make one Gemini call between them.
-// An entry is removed as soon as its run settles.
+// An entry is removed as soon as its run settles. A sharer's hooks are not called for that run.
 const inFlight = new Map<string, Promise<ImportResult>>();
 
-export async function importRecipe(rawUrl: string): Promise<ImportResult> {
+export async function importRecipe(rawUrl: string, hooks?: ImportHooks): Promise<ImportResult> {
   const canonical = canonicalizeUrl(rawUrl);
   if (!canonical) throw invalidUrl();
 
   const running = inFlight.get(canonical);
   if (running) return running;
 
-  const run = runImport(canonical).finally(() => inFlight.delete(canonical));
+  const run = runImport(canonical, hooks).finally(() => inFlight.delete(canonical));
   inFlight.set(canonical, run);
   return run;
 }
 
-async function runImport(canonical: string): Promise<ImportResult> {
+async function runImport(canonical: string, hooks?: ImportHooks): Promise<ImportResult> {
   // Refuse private hosts before any DB lookup. fetchPage repeats this check on every hop.
   if (isBlockedHost(new URL(canonical).hostname)) {
     throw new IngestError("blocked_url", "That link points to a private network address, so it can't be opened.");
@@ -50,6 +67,14 @@ async function runImport(canonical: string): Promise<ImportResult> {
   const jsonLd = extractJsonLdRecipe(page.html, finalUrl);
   const siteName = extractSiteName(page.html, finalUrl);
   const jsonLdIncomplete = !jsonLd || jsonLd.ingredients.length < 2 || jsonLd.instructions.length < 1;
+
+  hooks?.onParsed?.({
+    url: finalUrl,
+    title: jsonLd?.name,
+    siteName,
+    imageUrl: jsonLd?.imageUrl,
+    totalMin: jsonLd?.totalTimeMin,
+  });
 
   const recipe = await normalizeRecipe({
     url: finalUrl,
