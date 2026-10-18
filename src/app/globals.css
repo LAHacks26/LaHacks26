@@ -45,6 +45,7 @@
   --color-saffron-soft: var(--saffron-soft);
   --color-tomato: var(--tomato);
   --color-tomato-soft: var(--tomato-soft);
+  --color-tomato-ink: var(--tomato-ink);
   --color-sage: var(--sage);
   --color-sage-soft: var(--sage-soft);
   --color-ink: var(--ink);
@@ -86,6 +87,7 @@
   --saffron-soft: #FBEBD0;
   --tomato: #C8472D;
   --tomato-soft: #F7E1DA;
+  --tomato-ink: #A3321C; /* text on tomato-soft: ~5.5:1 (AA) */
   --sage: #6F8F6A;
   --sage-soft: #E3ECE0;
   --ink: #2B2118;
