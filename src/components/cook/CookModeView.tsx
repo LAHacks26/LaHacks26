@@ -1,148 +1,126 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useReducedMotion } from "motion/react";
-import { toast } from "sonner";
+import { PartyPopper } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Recipe, Step } from "@/lib/recipe/schema";
 import { CookStepCard, type CookStepStatus } from "./CookStepCard";
-import { type CookTimer, type CookTimerSeed, TimerTray } from "./TimerTray";
+import { type CookTimer, TimerTray } from "./TimerTray";
 import { TapToTalkButton } from "./TapToTalkButton";
 import { type VoiceTurn, VoiceTranscript } from "./VoiceTranscript";
 import { type WakeState, WakePill } from "./WakePill";
 
+// Cook mode screen (PRD §5.6). Controlled: the live page drives it from the cook store and the
+// voice session; /mocks/cook drives it from local state (CookModeDemo).
+
 export type CookModeViewProps = {
   recipe: Recipe;
-  /** Step to focus first. Steps before it start as done. */
-  initialStepId: string;
-  /** Wake-word state at mount. Defaults to "armed". */
-  initialVoice?: WakeState;
-  /** Timers already running at mount. */
-  initialTimers?: CookTimerSeed[];
-  /** Voice transcript shown above the bottom bar. */
+  currentStepId: string | null;
+  doneStepIds: string[];
+  timers: CookTimer[];
+  voice: WakeState;
   transcript?: VoiceTurn[];
+  /** A short line under the header, e.g. why voice is unavailable. */
+  notice?: ReactNode;
+  onFocusStep: (stepId: string) => void;
+  onMarkDone: (stepId: string) => void;
+  onStartTimer: (step: Step, index: number) => void;
+  onCancelTimer: (timerId: string) => void;
+  onTapToTalk: () => void;
+  onEnd: () => void;
 };
 
 export function CookModeView({
   recipe,
-  initialStepId,
-  initialVoice = "armed",
-  initialTimers = [],
+  currentStepId,
+  doneStepIds,
+  timers,
+  voice,
   transcript = [],
+  notice,
+  onFocusStep,
+  onMarkDone,
+  onStartTimer,
+  onCancelTimer,
+  onTapToTalk,
+  onEnd,
 }: CookModeViewProps) {
-  const [currentId, setCurrentId] = useState(initialStepId);
-  const [doneIds, setDoneIds] = useState<Set<string>>(() => {
-    const index = recipe.steps.findIndex((step) => step.id === initialStepId);
-    return new Set(recipe.steps.slice(0, Math.max(index, 0)).map((step) => step.id));
-  });
-  const [timers, setTimers] = useState<CookTimer[]>(() => {
-    const start = Date.now();
-    return initialTimers.map((timer) => ({
-      id: timer.id,
-      label: timer.label,
-      stepId: timer.stepId,
-      endsAt: start + timer.remainingSec * 1000,
-    }));
-  });
-  const [voice, setVoice] = useState<WakeState>(initialVoice);
   const reduce = useReducedMotion();
   const listRef = useRef<HTMLOListElement>(null);
-  const lastCurrentId = useRef(currentId);
+  const lastCurrentId = useRef(currentStepId);
+  const allDone = recipe.steps.length > 0 && recipe.steps.every((step) => doneStepIds.includes(step.id));
 
   // Keep the new current step in view. The first mount is skipped (the ref starts
   // at the initial id), so the page does not scroll on load.
   useEffect(() => {
-    if (lastCurrentId.current === currentId) return;
-    lastCurrentId.current = currentId;
+    if (lastCurrentId.current === currentStepId) return;
+    lastCurrentId.current = currentStepId;
     const card = listRef.current
       ?.querySelector<HTMLElement>('[aria-current="step"]')
       ?.closest("li");
     card?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-  }, [currentId, reduce]);
-
-  function focusStep(id: string) {
-    setCurrentId(id);
-    // Focusing a done step reopens it.
-    setDoneIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-  }
-
-  function markDone(step: Step) {
-    setDoneIds((prev) => new Set(prev).add(step.id));
-    const index = recipe.steps.findIndex((s) => s.id === step.id);
-    const next = recipe.steps[index + 1];
-    if (next) setCurrentId(next.id);
-  }
-
-  function cancelTimer(id: string) {
-    setTimers((prev) => prev.filter((timer) => timer.id !== id));
-  }
-
-  function tapToTalk() {
-    setVoice((prev) => (prev === "listening" ? "armed" : "listening"));
-  }
-
-  function endCooking() {
-    setVoice("off");
-    toast("Cooking ended. Mic is off.");
-  }
+  }, [currentStepId, reduce]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 pt-6 pb-48 sm:px-6 sm:pt-10">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
-          Cooking · {recipe.title}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <WakePill state={voice} />
-          <Button variant="outline" size="lg" className="h-11 bg-card" onClick={endCooking}>
-            End cooking
-          </Button>
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+            Cooking · {recipe.title}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <WakePill state={voice} />
+            <Button variant="outline" size="lg" className="h-11 bg-card" onClick={onEnd}>
+              End cooking
+            </Button>
+          </div>
         </div>
+        {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
       </header>
 
       <ol ref={listRef} aria-label="Recipe steps" className="flex flex-col gap-3">
         {recipe.steps.map((step, index) => {
-          const status: CookStepStatus = doneIds.has(step.id)
-            ? "done"
-            : step.id === currentId
-              ? "current"
+          // Voice navigation can focus a finished step without reopening it; it still shows as the focused one.
+          const status: CookStepStatus = step.id === currentStepId
+            ? "current"
+            : doneStepIds.includes(step.id)
+              ? "done"
               : "upcoming";
+          // Prefer the step's running timer over one that already rang.
+          const stepTimers = timers.filter((timer) => timer.stepId === step.id);
+          const timer = stepTimers.find((item) => !item.firedAt) ?? stepTimers[0];
           return (
             <CookStepCard
               key={step.id}
               step={step}
               index={index}
               status={status}
-              timer={timers.find((timer) => timer.stepId === step.id)}
-              onFocus={() => focusStep(step.id)}
-              onDone={() => markDone(step)}
-              onStartTimer={() => {
-                if (!step.timer) return;
-                const endsAt = Date.now() + step.timer.max * 60_000;
-                setTimers((prev) => [
-                  ...prev,
-                  { id: `${step.id}-${endsAt}`, label: `Step ${index + 1}`, stepId: step.id, endsAt },
-                ]);
-              }}
+              timer={timer}
+              onFocus={() => onFocusStep(step.id)}
+              onDone={() => onMarkDone(step.id)}
+              onStartTimer={() => onStartTimer(step, index)}
             />
           );
         })}
       </ol>
+
+      {allDone ? (
+        <div role="status" className="flex items-center gap-3 rounded-2xl bg-sage-soft p-5 text-ink">
+          <PartyPopper aria-hidden="true" className="shrink-0 text-sage" />
+          <p className="text-base font-medium">Every step is done. Enjoy your meal!</p>
+        </div>
+      ) : null}
 
       <VoiceTranscript turns={transcript} />
 
       {/* Always visible while cooking: timers at left, mic at right. */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/90 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-3xl items-end justify-between gap-3 px-4 py-3 sm:px-6">
-          <TimerTray timers={timers} onCancel={cancelTimer} />
+          <TimerTray timers={timers} onCancel={onCancelTimer} />
           <TapToTalkButton
-            active={voice === "listening"}
-            onPress={tapToTalk}
+            active={voice === "listening" || voice === "thinking" || voice === "speaking"}
+            onPress={onTapToTalk}
             className="ml-auto"
           />
         </div>

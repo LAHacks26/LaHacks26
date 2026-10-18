@@ -11,6 +11,8 @@ export type CookTimer = {
   endsAt: number;
   /** The step this timer belongs to, if any. */
   stepId?: string;
+  /** Epoch milliseconds when the timer rang. */
+  firedAt?: number;
 };
 
 /** Timer as seeded from data: remaining seconds are turned into endsAt on mount. */

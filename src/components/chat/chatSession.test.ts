@@ -51,7 +51,43 @@ describe("chat request lifecycle", () => {
   });
   it("does not compete with an existing line edit", async () => {
     const scope = open(); useRecipeStore.getState().setEditing({ kind: "step", id: "s1" });
-    await scope.send("Make it vegan"); expect(requestChat).not.toHaveBeenCalled();
+    expect(await scope.send("Make it vegan")).toEqual({ ok: false, reason: "busy" });
+    expect(requestChat).not.toHaveBeenCalled();
+  });
+  it("releases busy when disposed mid-send while the recipe stays open (End cooking during a voice edit)", async () => {
+    const scope = open();
+    const other = createChatSession("a"); scopes.push(other);
+    let resolve!: (value: Awaited<ReturnType<typeof requestChat>>) => void;
+    vi.mocked(requestChat).mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    const pending = scope.send("I'm out of butter");
+    expect(useChatStore.getState().busy).toBe(true);
+    scope.dispose();
+    resolve({ baseVersion: 0, reply: "Done", result: patch });
+    expect(await pending).toEqual({ ok: false, reason: "gone" });
+    expect(useChatStore.getState().busy).toBe(false);
+    expect(useRecipeStore.getState().editing).toBeNull();
+    vi.mocked(requestChat).mockResolvedValueOnce({ baseVersion: 0, reply: "Sure." });
+    expect(await other.send("What next?")).toMatchObject({ ok: true });
+  });
+  it("does not clear a newer send's busy state after A to B to A", async () => {
+    const scope = open();
+    let resolveOld!: (value: Awaited<ReturnType<typeof requestChat>>) => void;
+    vi.mocked(requestChat).mockReturnValueOnce(new Promise((done) => { resolveOld = done; }));
+    const old = scope.send("First");
+    open("b"); const again = open("a");
+    vi.mocked(requestChat).mockReturnValueOnce(new Promise(() => {}));
+    void again.send("Second");
+    expect(useChatStore.getState().busy).toBe(true);
+    resolveOld({ baseVersion: 0, reply: "Late" }); await old;
+    expect(useChatStore.getState().busy).toBe(true);
+  });
+  it("reports what happened, so voice can say it", async () => {
+    const scope = open();
+    vi.mocked(requestChat).mockResolvedValueOnce({ baseVersion: 0, reply: "Done.", result: patch }).mockResolvedValueOnce({ baseVersion: 1, reply: "Fold gently." }).mockRejectedValueOnce(new Error("Offline"));
+    expect(await scope.send("Chop carefully")).toEqual({ ok: true, reply: "Done.", summary: "Updated chopping" });
+    expect(await scope.send("What does fold mean?")).toEqual({ ok: true, reply: "Fold gently.", summary: undefined });
+    expect(await scope.send("Help")).toEqual({ ok: false, reason: "failed" });
+    expect(await scope.send("   ")).toEqual({ ok: false, reason: "gone" });
   });
   it("shows a retryable error and releases only its own lock", async () => {
     const scope = open(); vi.mocked(requestChat).mockRejectedValueOnce(new Error("Offline"));

@@ -39,9 +39,15 @@ function request(overrides: Partial<Req> = {}): Req {
 const coconutPatch = {
   kind: "patch",
   summary: "Swapped heavy cream for coconut milk",
-  ops: [{ op: "update_ingredient", id: "i9", item: "coconut milk" }],
+  ops: [
+    { op: "update_ingredient", id: "i9", item: "coconut milk" },
+    { op: "update_step", id: "s7", text: "Stir in the coconut milk and the broiled chicken, then simmer gently for 2 minutes more." },
+  ],
   meta: { times: { totalMin: 55, activeMin: 25 } },
 };
+
+/** The same swap without rewriting s7, which still says "heavy cream". */
+const uncascadedPatch = { ...coconutPatch, ops: [coconutPatch.ops[0]] };
 
 /** The prompt sent on the nth call (1-based). */
 function promptOf(call: number): string {
@@ -139,6 +145,72 @@ describe("runEdit: patches", () => {
     expect(generateJsonMock).toHaveBeenCalledTimes(2);
     expect(promptOf(2)).toContain('which contains "dairy"');
     expect(result.ops?.[0]).toMatchObject({ op: "add_ingredient", ingredient: { item: "coconut oil" } });
+  });
+});
+
+describe("runEdit: smart cascade", () => {
+  it("retries once when a swap leaves a step naming the old ingredient", async () => {
+    generateJsonMock.mockResolvedValueOnce(uncascadedPatch as never).mockResolvedValueOnce(coconutPatch as never);
+
+    const result = await runEdit(request());
+
+    expect(generateJsonMock).toHaveBeenCalledTimes(2);
+    expect(promptOf(2)).toContain('Step s7 uses i9 and still says "cream"');
+    expect(result.ops).toEqual(coconutPatch.ops);
+  });
+
+  it("returns the valid but incomplete patch when the retry fails", async () => {
+    generateJsonMock
+      .mockResolvedValueOnce(uncascadedPatch as never)
+      .mockRejectedValueOnce(new AiError("The AI request timed out. Try again.", "timeout"));
+
+    const result = await runEdit(request());
+
+    expect(result.kind).toBe("patch");
+    expect(result.ops).toEqual(uncascadedPatch.ops);
+  });
+
+  it("returns the valid but incomplete patch when the retry is invalid", async () => {
+    generateJsonMock.mockResolvedValueOnce(uncascadedPatch as never).mockResolvedValueOnce(coconutPatch as never);
+    validateMock.mockReturnValueOnce([]).mockReturnValueOnce(["ops[1] unknown step id s99"]);
+
+    const result = await runEdit(request());
+
+    expect(result.ops).toEqual(uncascadedPatch.ops);
+  });
+
+  it("accepts an incomplete retry after a hard failure, since it passed validation", async () => {
+    generateJsonMock.mockResolvedValueOnce(coconutPatch as never).mockResolvedValueOnce(uncascadedPatch as never);
+    validateMock.mockReturnValueOnce(["ops[0] unknown ingredient id i99"]).mockReturnValue([]);
+
+    const result = await runEdit(request());
+
+    expect(result.ops).toEqual(uncascadedPatch.ops);
+    expect(generateJsonMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the incomplete patch without a retry when the time budget is spent", async () => {
+    let now = 1_000_000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    generateJsonMock.mockImplementationOnce(async () => {
+      now += 25_000;
+      return uncascadedPatch as never;
+    });
+
+    const result = await runEdit(request());
+
+    expect(result.ops).toEqual(uncascadedPatch.ops);
+    expect(generateJsonMock).toHaveBeenCalledTimes(1);
+    clock.mockRestore();
+  });
+
+  it("accepts a still-incomplete retry instead of failing the edit", async () => {
+    generateJsonMock.mockResolvedValue(uncascadedPatch as never);
+
+    const result = await runEdit(request());
+
+    expect(result.ops).toEqual(uncascadedPatch.ops);
+    expect(generateJsonMock).toHaveBeenCalledTimes(2);
   });
 });
 

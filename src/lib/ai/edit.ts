@@ -2,6 +2,7 @@ import "server-only";
 import type { z } from "zod";
 import { applyEditResult, normalizePatchIds, validatePatch } from "../recipe/patch";
 import type { AiEditResult, PatchOp, Recipe, LineRef } from "../recipe/schema";
+import { cascadeProblems } from "./cascade";
 import type { EditRequestSchema } from "./contracts";
 import { compactRecipe, containsAllergen, describeTarget, filterAllergenSafe, targetName } from "./context";
 import { type FlatEditResult, FlatEditResultSchema, FLAT_EDIT_GEMINI_SCHEMA, checkAiEditResult, flatResultToDraft } from "./editSchema";
@@ -131,7 +132,8 @@ function checkResult(req: EditContext, flat: FlatEditResult): Check {
  * Runs an edit. Returns a validated AiEditResult. Patches are normalized and validated against the
  * recipe, and their meta is checked with applyEditResult. Rejections get exactly 3 allergen-free
  * suggestions. Tips are forced onto the request target. An invalid result is retried once with the
- * problems attached. A second failure throws AiError "invalid".
+ * problems attached. A second failure throws AiError "invalid". A valid patch that misses a smart
+ * cascade step is also retried once, but is returned rather than failing the edit.
  */
 export async function runEdit(req: EditRequest): Promise<AiEditResult> {
   // Missing appliance rewrites more steps, so it gets the smart tier. Both are popover actions, so both use low thinking (PRD §6.1).
@@ -146,23 +148,39 @@ export async function runValidatedEdit(req: EditContext, base: string, tier: "fa
   const remaining = () => budgetMs - (Date.now() - started);
 
   let prompt = base;
+  // A valid patch with an incomplete cascade. It is retried once, but still beats failing the edit.
+  let incomplete: AiEditResult | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (remaining() <= 0) throw new AiError(TIMEOUT_MESSAGE, "timeout");
-    const flat = await withDeadline(
-      generateJson({
-        schema: FlatEditResultSchema,
-        geminiSchema: FLAT_EDIT_GEMINI_SCHEMA,
-        system: SYSTEM,
-        prompt,
-        tier,
-        thinkingLevel,
-      }),
-      remaining(),
-    );
+    if (remaining() <= 0) {
+      if (incomplete) return incomplete;
+      throw new AiError(TIMEOUT_MESSAGE, "timeout");
+    }
+    let flat: FlatEditResult;
+    try {
+      flat = await withDeadline(
+        generateJson({
+          schema: FlatEditResultSchema,
+          geminiSchema: FLAT_EDIT_GEMINI_SCHEMA,
+          system: SYSTEM,
+          prompt,
+          tier,
+          thinkingLevel,
+        }),
+        remaining(),
+      );
+    } catch (err) {
+      if (incomplete) return incomplete;
+      throw err;
+    }
     const checked = checkResult(req, flat);
-    if (checked.ok) return checked.result;
-    prompt = `${base}\n\nYour previous result was rejected: ${checked.problems.join(" ")}\nReturn a corrected result that fixes every problem above and still follows the rules.`;
+    const problems = checked.ok
+      ? checked.result.kind === "patch" ? cascadeProblems(req.recipe, checked.result.ops ?? []) : []
+      : checked.problems;
+    if (checked.ok && (problems.length === 0 || attempt === MAX_ATTEMPTS)) return checked.result;
+    if (checked.ok) incomplete = checked.result;
+    prompt = `${base}\n\nYour previous result was rejected: ${problems.join(" ")}\nReturn a corrected result that fixes every problem above and still follows the rules.`;
   }
 
+  if (incomplete) return incomplete;
   throw new AiError(INVALID_MESSAGE, "invalid");
 }

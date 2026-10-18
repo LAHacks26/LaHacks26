@@ -179,11 +179,18 @@ export function rankCandidates(
   return [...cards].sort((a, b) => Number(hasMatch(a)) - Number(hasMatch(b)));
 }
 
-/** The "HH:MM" wall-clock time in an ISO string, as the summary shows it. "" when missing or unparseable. */
+/**
+ * The viewer's local "HH:MM" for an ISO deadline, as the summary shows it. "" when missing or unparseable.
+ * The landing page stores deadlines with toISOString (UTC), so the digits in the string are not the
+ * time the user picked. Meta arrives over SSE, so this only runs in the browser.
+ */
 export function readyByClock(iso: string | undefined): string {
   if (!iso) {
     return "";
   }
-  const match = /T(\d{2}):(\d{2})/.exec(iso);
-  return match ? `${match[1]}:${match[2]}` : "";
+  const deadline = new Date(iso);
+  if (Number.isNaN(deadline.getTime())) {
+    return "";
+  }
+  return `${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}`;
 }

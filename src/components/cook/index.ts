@@ -1,5 +1,7 @@
 export { CookModeView } from "./CookModeView";
 export type { CookModeViewProps } from "./CookModeView";
+export { CookModeDemo } from "./CookModeDemo";
+export type { CookModeDemoProps } from "./CookModeDemo";
 export { CookStepCard } from "./CookStepCard";
 export type { CookStepCardProps, CookStepStatus } from "./CookStepCard";
 export { TimerTray, formatClock, useNow } from "./TimerTray";

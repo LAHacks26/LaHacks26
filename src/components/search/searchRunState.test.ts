@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { readyByFromClock } from "@/lib/recipe/readyBy";
 import type { CandidateCardData, SearchEvent } from "@/lib/search/types";
 import {
   initialSearchRunState,
@@ -201,9 +202,25 @@ describe("rankCandidates", () => {
 });
 
 describe("readyByClock", () => {
-  it("reads the wall-clock time in the ISO string", () => {
+  const originalTz = process.env.TZ;
+  beforeEach(() => {
+    process.env.TZ = "America/Los_Angeles";
+  });
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  });
+
+  it("shows the deadline in the viewer's local time", () => {
     expect(readyByClock("2026-10-18T19:30:00-07:00")).toBe("19:30");
-    expect(readyByClock("2026-10-18T07:05:00+00:00")).toBe("07:05");
+    expect(readyByClock("2026-10-18T07:05:00+00:00")).toBe("00:05");
+  });
+
+  it("round-trips the time the user picked on the landing page (stored as UTC)", () => {
+    // 7:30 PM in Los Angeles is stored as 02:30Z the next day; the summary must still say 19:30.
+    const iso = readyByFromClock("19:30", new Date("2026-10-18T12:00:00-07:00"));
+    expect(iso).toBe("2026-10-19T02:30:00.000Z");
+    expect(readyByClock(iso)).toBe("19:30");
   });
 
   it("returns an empty string when there is no ready-by time", () => {

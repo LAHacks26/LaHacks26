@@ -8,9 +8,16 @@ const req = { recipe: butterChicken, baseVersion: 0, allergies: ["peanut"], cont
 beforeEach(() => vi.resetAllMocks());
 describe("whole recipe validation", () => {
   it("uses smart reasoning and validates a real patch", async () => {
+    vi.mocked(generateJson).mockResolvedValue({ kind: "patch", summary: "Use coconut", ops: [{ op: "update_ingredient", id: "i9", item: "coconut milk" }, { op: "update_step", id: "s7", text: "Stir in the coconut milk and the broiled chicken, then simmer gently for 2 minutes more." }] });
+    expect((await runTransform(req)).kind).toBe("patch");
+    expect(generateJson).toHaveBeenCalledTimes(1);
+    expect(generateJson).toHaveBeenCalledWith(expect.objectContaining({ tier: "smart", thinkingLevel: "medium" }));
+  });
+  it("asks once for the cascade a whole-recipe swap missed", async () => {
     vi.mocked(generateJson).mockResolvedValue({ kind: "patch", summary: "Use coconut", ops: [{ op: "update_ingredient", id: "i9", item: "coconut milk" }] });
     expect((await runTransform(req)).kind).toBe("patch");
-    expect(generateJson).toHaveBeenCalledWith(expect.objectContaining({ tier: "smart", thinkingLevel: "medium" }));
+    expect(generateJson).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(generateJson).mock.calls[1]?.[0].prompt).toContain("Step s7 uses i9");
   });
   it("rejects allergen introduction after one correction attempt", async () => {
     vi.mocked(generateJson).mockResolvedValue({ kind: "patch", ops: [{ op: "update_ingredient", id: "i9", item: "peanut butter" }] });
