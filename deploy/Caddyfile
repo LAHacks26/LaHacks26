@@ -7,6 +7,12 @@
 			flush_interval -1
 		}
 	}
+	# Explanations stream as plain text: no compression, flush every chunk immediately.
+	handle /api/ai/explain {
+		reverse_proxy 127.0.0.1:3000 {
+			flush_interval -1
+		}
+	}
 	handle {
 		encode zstd gzip
 		reverse_proxy 127.0.0.1:3000

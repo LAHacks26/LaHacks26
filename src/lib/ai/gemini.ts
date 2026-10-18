@@ -208,3 +208,99 @@ export async function embed(text: string): Promise<number[]> {
   }
   return values;
 }
+
+export type StreamTextOptions = {
+  system: string;
+  prompt: string;
+  tier: Tier;
+  thinkingLevel?: ThinkingLevelName;
+  /** Covers the whole stream, not just the first chunk. */
+  timeoutMs?: number;
+  /** Aborts the Gemini request when the caller goes away (for example, the browser closed the stream). */
+  signal?: AbortSignal;
+};
+
+/**
+ * One streamed plain-text call. Same models, timeout and error mapping as generateJson. The fallback
+ * model is used only when the primary is overloaded before its first chunk; after that, errors end the stream.
+ */
+export async function* streamText(opts: StreamTextOptions): AsyncGenerator<string> {
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS[opts.tier];
+  const names = models();
+  const primary = names[opts.tier];
+  const config: StreamConfig = {
+    system: opts.system,
+    thinkingLevel: opts.thinkingLevel ?? (opts.tier === "fast" ? "low" : undefined),
+  };
+
+  const controller = new AbortController();
+  const onCallerAbort = () => controller.abort();
+  if (opts.signal?.aborted) controller.abort();
+  opts.signal?.addEventListener("abort", onCallerAbort, { once: true });
+
+  // The race in pumpStream guarantees the timeout even if the SDK ignores the abort signal.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new AiError("The AI request timed out. Try again.", "timeout"));
+    }, timeoutMs);
+  });
+  deadline.catch(() => {});
+
+  let model = primary;
+  let emitted = false;
+  try {
+    try {
+      for await (const text of pumpStream(primary, config, opts.prompt, controller.signal, deadline)) {
+        emitted = true;
+        yield text;
+      }
+    } catch (err) {
+      if (emitted || err instanceof AiError || !isOverloaded(err)) throw err;
+      logFailure(primary, err);
+      model = names.fallback;
+      for await (const text of pumpStream(model, config, opts.prompt, controller.signal, deadline)) {
+        emitted = true;
+        yield text;
+      }
+    }
+  } catch (err) {
+    throw toAiError(err, model);
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onCallerAbort);
+    // Stops the HTTP request if the consumer stopped reading early. A no-op once the stream has finished.
+    controller.abort();
+  }
+}
+
+type StreamConfig = { system: string; thinkingLevel?: ThinkingLevelName };
+
+async function* pumpStream(
+  model: string,
+  config: StreamConfig,
+  prompt: string,
+  signal: AbortSignal,
+  deadline: Promise<never>,
+): AsyncGenerator<string> {
+  const stream = await Promise.race([
+    getClient().models.generateContentStream({
+      model,
+      contents: prompt,
+      config: {
+        systemInstruction: config.system,
+        thinkingConfig: config.thinkingLevel ? { thinkingLevel: THINKING_LEVEL[config.thinkingLevel] } : undefined,
+        abortSignal: signal,
+      },
+    }),
+    deadline,
+  ]);
+  const iterator = stream[Symbol.asyncIterator]();
+  for (;;) {
+    const next = await Promise.race([iterator.next(), deadline]);
+    if (next.done) return;
+    const text = next.value.text;
+    if (text) yield text;
+  }
+}

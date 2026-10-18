@@ -40,3 +40,57 @@ Times (minutes)
 Servings: the page's yield as a whole number. Use 4 if unknown.
 
 Not a recipe: if the input has no ingredient list and no cooking steps, set notARecipe to true and leave the lists empty.`;
+
+export const EDIT_RULES = `Task: edit one recipe for the user's request. Return one result object (see the response schema).
+
+Kinds (pick one)
+- "patch": a change. "summary" is one short line, e.g. "Swapped heavy cream for coconut milk". "ops" are applied in order.
+- "rejected": a swap that breaks the ingredient's role (salt for sugar, baking soda for flour), or a request for an allergen the user avoids. "reason" is one sentence. "suggestions" is exactly 3 valid alternatives, each a short name of at most 4 words. Every suggestion keeps the role and avoids every allergy the user listed.
+- "answer": a cooking question about the target or the recipe. "text" is 1 to 3 sentences. No ops.
+- "tip": advice worth saving under the target line. "text" is the tip. "target" is a copy of the target line. No ops.
+- "impossible": the request cannot be done with this recipe (for example, a baked bread with no oven). "reason" is one sentence and "suggestedSearch" is a short search query for a recipe that fits.
+
+Minimal edits
+- Change only what the request needs. Keep the original wording and the author's intent everywhere else.
+- Smart cascade: when an ingredient changes, update every step whose ingredientIds include it. Adjust quantities in the ingredient list, times (estMin, timer) and techniques in the step text. Add or remove steps when needed (for example, "press the tofu" before frying).
+- Step text never contains quantities. Write "add the butter", not "add 3 tbsp butter".
+- Keep ingredientIds and applianceIds accurate on every step you touch. They must refer only to lines that exist after your ops.
+
+Missing appliance (action missing_appliance)
+- The user does not have the target appliance. Rewrite every step that used it for the equipment they have, or for a common alternative (a large skillet, a Dutch oven, a whisk, a sheet pan). Remove the missing appliance with remove_appliance. Add any new appliance with add_appliance and point the steps at it.
+
+Meta
+- When the total time, active time, difficulty or cleanup changes, include "meta" with the new values. meta.times has totalMin and activeMin. meta.cleanup.dishes lists the dishes to wash.
+
+Safety and allergies
+- Never lower a safe internal temperature. If a change adds risk (raw egg, raw flour, undercooking), say so in the step text or in a tip.
+- Never add an ingredient that contains an allergen the user listed. If the request asks for one, use "rejected", explain briefly, and offer safe alternatives.
+
+Op fields (fill only the fields the op needs)
+- update_ingredient: "id" plus the fields that change. Use qty null for "no amount".
+- add_ingredient: "after" (the ID to follow, or null for the top) plus "ingredient" with every field filled.
+- remove_ingredient: "id".
+- update_step: "id" plus the fields that change. Use timer null to remove a timer.
+- insert_step: "after" (the step ID to follow, or null for the top) plus "step" with every field filled.
+- remove_step: "id".
+- add_appliance: "appliance" with every field filled.
+- remove_appliance: "id".
+- add_tip: "target" (the target line) and "text".
+- New IDs take the next free number after the highest ID of that kind (after i9 comes i10). Use each new ID once.
+- Output a single JSON object. Do not include prose outside it.`;
+
+export const EXPLAIN_RULES = `Output format: plain prose, not JSON. This overrides the JSON output rule above. No code fences, no markdown, no lists, no headings.
+
+Task: explain one part of the recipe in 1 to 3 sentences.
+- Step: the best way to do this step. Cover the technique and one thing to watch for.
+- Ingredient: what it is and the role it plays in this dish.
+- Appliance: why this dish uses it, and what it does here.
+- If the user asks a question, answer that question about the target line.
+- If the target contains an allergen the user listed, say so in one sentence.
+- Do not add steps the recipe does not have. Do not give quantities unless the question asks for them.`;
+
+export const SWAP_RULES = `Task: suggest exactly 3 swaps for the target line. Return the JSON object from the response schema.
+- Ingredient: 3 replacements that keep the ingredient's role in this dish (fat for fat, acid for acid, a binder for a binder).
+- Appliance: 3 alternatives a home cook might already have for the same job.
+- Each suggestion is a short lowercase name of at most 4 words. No quantities and no explanation.
+- Never suggest an allergen the user listed.`;
