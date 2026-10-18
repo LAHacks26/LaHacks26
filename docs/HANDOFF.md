@@ -1,34 +1,47 @@
 # Saffron — handoff for the next agent
 
-Written 2026-10-18 for any coding agent (Codex, Claude Code, etc.) picking up the build. Read this file first, then `CLAUDE.md` (rules and hard-won gotchas) and `docs/PRD.md` (the spec and source of truth). Update this file when you finish a task.
+Last updated 2026-10-18, for any coding agent (Codex, Claude Code, etc.) picking up the build. Read this file first, then `CLAUDE.md` (rules and hard-won gotchas) and `docs/PRD.md` (the spec and source of truth). Update this file when you finish a task.
 
 ## 1. Where things stand
 
-| Phase (PRD §14) | Status | Branch |
+| Phase (PRD §14) | Status | Where |
 |---|---|---|
 | 0 Scaffold, schema, DB, deploy skeleton | Done | `main` |
 | UI mocks (`/mocks/*`) | Done | `main` |
 | 1 URL import → recipe page | **Done, tested end to end** | `main` |
-| 2 Hero: click a line → ask → recipe edits itself | **In progress.** Patch engine, store and AI routes are merged; UI wiring is underway (Task B) | `david/phase-2` |
-| 3 Chat | Contract only (`ChatRequestSchema` in `src/lib/ai/contracts.ts`) | `david/phase-2` |
-| 4 Search | Contract (`src/lib/search/types.ts`); server and page are being built | `david/phase-2` |
-| 5 Auth / save / share | Not started. No Google OAuth credentials yet (see §3) | — |
+| 2 Hero: click a line → ask → recipe edits itself | Engine, store, AI routes and allergen safety net **merged**. The UI wiring is **finishing its review-fix round** (Task B). | `david/phase-2`, UI on `wip/phase-2-ui` |
+| 3 Chat | Contract merged. The server route and the UI dock are **being built** | local worktrees (see below) |
+| 4 Search | Contract and **search page merged**. The server (pipeline, mock agent, SSE) is **built and live-tested, awaiting review** | `david/phase-2`, server local |
+| 5 Auth / save / share | Not started. No Google OAuth credentials yet (Task F) | — |
 | 6 Cook mode + voice | Contracts only (`src/lib/voice/types.ts`, `src/lib/store/cookStore.ts` stub) | `david/phase-2` |
-| 7 Scaler / units / schedule | Pure functions being built | — |
+| 7 Scaler / units / schedule | **Pure functions merged** (`src/lib/recipe/{scale,units,schedule}.ts`). Not wired into the UI yet (Task D) | `david/phase-2` |
 | 8 Deploy + demo | Not started | — |
 
 **Branches on GitHub**
-- `main`: Phase 1 merged. Builds and works.
-- `david/phase-2`: **continue from here.** It holds:
+- `main`: Phase 1. Builds and works.
+- `david/phase-2`: **continue from here.** 669 tests pass. It holds everything reviewed and merged so far:
   - the contracts for phases 2, 3, 4 and 6;
   - the patch engine and the working-copy store;
-  - the AI routes (`/api/ai/edit`, `/api/ai/explain`, `/api/ai/suggest-swaps`), reviewed twice.
+  - the AI routes;
+  - the allergen safety net;
+  - the Phase 7 functions;
+  - the search page.
+- `wip/phase-2-ui`: a snapshot of the Phase 2 UI wiring, taken mid-way through its review-fix round. Unreviewed, so don't merge it as is (Task B).
 
-  300 tests pass.
+**Work in progress on David's laptop.** These live in agent worktrees under `.claude/worktrees/` and are not on GitHub until reviewed and merged:
 
-Work in progress lives in agent worktrees under `.claude/worktrees/` on David's laptop until it is reviewed and merged, so it is not on GitHub yet.
+| Work | Worktree |
+|---|---|
+| Phase 2 UI wiring | `agent-af277dad802f70d7a` |
+| Phase 4 search server | `agent-ae9f37309420f6a54` |
+| Phase 3 chat server | `agent-a2d09138d944769dd` |
+| Phase 3 chat UI | `agent-a5f048929344d87b6` |
 
-**The live site** (https://96-30-204-210.sslip.io) still runs the old mocks-only build. Phase 1 has not been deployed. See §6.
+If that laptop's session is gone, rebuild these from the specs in §3. The contracts make that straightforward.
+
+**The live site** (https://96-30-204-210.sslip.io) still runs the old mocks-only build. Nothing since Phase 0 is deployed. See §6.
+
+**Git remote:** GitHub says the repo moved to `https://github.com/LAHacks26/LaHacks26.git`. Pushes still work through the redirect. Run `git remote set-url origin https://github.com/LAHacks26/LaHacks26.git` when convenient.
 
 ## 2. Setup on a new machine
 
@@ -53,100 +66,147 @@ Work in progress lives in agent worktrees under `.claude/worktrees/` on David's 
 | Homemade mac and cheese | `/recipe/8992ffb5-d680-4624-b857-fda1ab3377a2` |
 | Chocolate chip cookies | `/recipe/3ab04875-2e45-4cce-b658-8b65e0baee91` |
 
+## 2.5 What is merged on `david/phase-2` (quick map)
+
+| Area | Files |
+|---|---|
+| Contracts | `src/lib/ai/contracts.ts` (explain, suggest-swaps, edit, chat); `src/lib/search/types.ts` (search request, SSE events, cards); `src/lib/voice/types.ts` (voice turn, tools, `VoiceProvider`); `src/lib/store/cookStore.ts` (stub signatures) |
+| Patch engine | `src/lib/recipe/patch.ts`: `normalizePatchIds`, `validatePatch`, `applyPatch`, `applyEditResult`, `addTip`. Pure; shared by client and server |
+| Working copy | `src/lib/store/recipeStore.ts`: zustand, localStorage `saffron:wc:<sourceRecipeId>`, undo stack of 20. Call `setEditing(target)` before an edit. `applyEdit` returns `"applied" \| "stale" \| "ignored"` |
+| AI routes | `/api/ai/edit` (`src/lib/ai/edit.ts`, `editSchema.ts`). Gemini fills a flat op schema, which is converted to `PatchOp`, then normalized, validated and test-applied, with one retry and a total deadline. `/api/ai/explain` streams plain text. `/api/ai/suggest-swaps` returns exactly 3. Shared helpers: `src/app/api/ai/shared.ts` (body cap, rate limit, errors) and `src/lib/ai/context.ts` |
+| Allergen safety net | `containsAllergen` in `src/lib/ai/context.ts`: synonyms (butter → dairy, almond → tree nuts, soy sauce → gluten, …), negations only on the allergy's own name, plant-based lookalikes exempt. Table tests in `allergenSynonyms.test.ts` |
+| Phase 7 functions | `scale.ts` (`scaleQty`, `formatUsQty`, `formatMetricQty`), `units.ts` (`convertIngredient`, `convertTemperaturesInText`, `formatIngredientQty`), `schedule.ts` (`stepClockTimes`, `readyByStatus`, `formatClock`, `maxTotalMinFor`) |
+| Search page | `/search/[searchId]`: `src/components/search/SearchRun.tsx`, the pure reducer `searchRunState.ts`, and `src/lib/search/client.ts` (`startSearch`, `subscribeSearch` with connect and stall watchdogs, `importRecipeLink`, `readAllergies`) |
+| Caddy | `deploy/Caddyfile` stops buffering `/api/ai/explain` and the search SSE stream (not yet copied to the VM) |
+
 ## 3. Next tasks, in order
 
-### Task A: AI routes (DONE, merged into `david/phase-2`)
-Both rounds of review fixes are applied: allergen "-free" handling, the untrusted fence, explain-stream errors, the Caddy streaming block, 400s before calling Gemini, and a total deadline.
+### Task B: finish and merge the Phase 2 UI wiring (hero feature)
+This is in progress. A snapshot is on `wip/phase-2-ui`; the newest version is in worktree `agent-af277dad802f70d7a`. The demo script steps 4–7 in PRD §3 are its acceptance test.
 
-Still open:
-- A follow-up adding allergen synonyms ("butter" → dairy, "almond" → tree nuts, and so on) is in progress.
-- Make **one** live call: substitute heavy cream → coconut milk on the butter chicken recipe, through `POST /api/ai/edit`. This checks Gemini's output against the real patch engine; the earlier smoke test ran with `patch.ts` stubbed.
+**What it contains:**
+- `src/lib/api/aiClient.ts`
+- `src/components/recipe/RecipeEditor.tsx`: the popover state machine. Explain streams and is saved as a tip; substitute shows prefetched swap chips plus "with…"; the missing-appliance and ask actions; rejection, impossible and error states; stale retry; phrase selection anchored to the selection; the glow, the 8 s undo toast and Ctrl/Cmd+Z.
+- `LinePopover` rebuilt on Base UI with a virtual anchor.
+- `src/lib/allergies.ts`, using the localStorage key `saffron:allergies`.
+- The `?q=` prefill on the landing page.
 
-**What was merged:**
-- `src/lib/ai/edit.ts`: `runEdit`. Gemini fills a flat op schema (`editSchema.ts`, because Gemini handles `oneOf` poorly), which is converted to `PatchOp`. Then `normalizePatchIds`, `validatePatch`, `applyEditResult`, with one retry carrying the error messages.
-- `explain.ts`: a streamed plain-text answer.
-- `swaps.ts`: exactly 3 allergen-safe swaps.
-- `context.ts`: shared prompt helpers.
-- The routes `src/app/api/ai/{edit,explain,suggest-swaps}/route.ts`, plus `shared.ts` for body cap, rate limit and error mapping.
-- `streamText` in `gemini.ts`, and new rules in `prompts.ts`.
+**The review-fix round being applied:**
+1. Mouseup inside the popover re-opened and reset it.
+2. Edits were not tied to the recipe or abortable on unmount; dropped results were silent.
+3. Mode desync when switching actions mid-stream.
+4. Trigger clicks swallowed while text was selected.
+5. Rejection chips on non-ingredients.
+6. Mock explain states.
+7. A flash before the stored copy loads.
+8. `aria-live` and focus handling.
+9. Real allergies sent with every request.
 
-### Task B: wire the recipe page UI to the store and the AI routes (not started)
-This is the hero feature. The demo script steps 4–7 in PRD §3 are its acceptance test.
+**When it's done:**
+1. Re-review it, then merge into `david/phase-2`.
+2. Dedupe `readAllergies`: the search client has its own; make it re-export from `src/lib/allergies.ts`.
+3. **Live test steps 4–7 against real Gemini** on the butter chicken recipe. That's about 6–8 calls:
+   - cream → coconut milk;
+   - salt → sugar, rejected;
+   - highlight a phrase, then Explain;
+   - Oven → "I don't have this".
 
-**Read first:**
-- `src/lib/ai/contracts.ts` (route request and response shapes).
-- `src/lib/recipe/patch.ts` and `src/lib/store/recipeStore.ts`. Callers must call `setEditing(target)` before starting an edit. `applyEdit` returns `"applied" | "stale" | "ignored"`.
-- `src/components/recipe/*`. `RecipeView` and `LinePopover` are mock-driven today. `/mocks/recipe?state=...` must keep working.
+   This is also the first check of real Gemini patches against the real patch engine.
 
-**Build:**
-1. `src/lib/api/aiClient.ts`: client fetch helpers `explainStream(req, {signal, onChunk})`, `suggestSwaps`, `requestEdit`.
-   - Validate every response with the contract schemas.
-   - Show only user-facing error messages, never raw JS errors.
-   - Time out after 30 s.
-2. `src/components/recipe/RecipeEditor.tsx` (client component, props `{sourceRecipeId, recipe}`). On mount, call `useRecipeStore.getState().load(...)`. Render from `copy.recipe`.
+### Task C: Phase 4 search server, then landing wiring
+The server is built in worktree `agent-ae9f37309420f6a54` and awaits review, against `src/lib/search/types.ts`. Live test results:
+- A search for "butter chicken" streamed the cached recipe instantly, then 3 candidates.
+- A search for "15-minute butter chicken" dropped every candidate as too long, without any Gemini calls.
+- The cosine-similarity threshold is tuned to **0.64**. Correct matches score 0.65–0.76; "chocolate cake" doesn't match mac and cheese.
+- The SSE `data` field is the whole event JSON, `type` included.
 
-   Popover actions per line type:
+What the server consists of:
 
-   | Line | Action | Calls |
-   |---|---|---|
-   | Ingredient | **Substitute…** | 3 swap chips, prefetched when the popover opens, plus a "with…" field. Choosing one sends edit `substitute`. |
-   | Ingredient | **What is this?** | explain |
-   | Step | **Explain** | explain |
-   | Step | Ask field | edit `ask` |
-   | Appliance | **I don't have this** | edit `missing_appliance`, sent immediately |
-   | Appliance | **Explain** | explain |
+| File | Job |
+|---|---|
+| `parseQuery.ts` | Query parsing (Gemini fast, cached) |
+| `cache.ts` | pgvector top-3 with a tuned similarity threshold |
+| `browserUse.ts` | The `BrowserUseClient` interface plus `MockBrowserUseClient` (~8 s, a scripted step log, real verified URLs from `mockResults.ts`) |
+| `runSearch.ts` | In-memory run registry on `globalThis`; one run per `saffron_sid` cookie, at most 3 concurrent, replays to late subscribers |
+| `src/app/api/search/route.ts`, `src/app/api/search/[searchId]/stream/route.ts` | The routes |
 
-   **Explain:** stream the answer into the popover. When it finishes, save it with `addTip`. Explain may run while an edit is running. Abort the stream when the popover closes.
+`importRecipe(url, hooks)` gains an `onParsed` hook, so a basic card can be emitted before normalization finishes.
 
-   **Edit flow:**
-   1. Call `setEditing(target)` and record `baseVersion`.
-   2. Send `requestEdit`.
-   3. Handle the result by kind:
+**After merging:**
+- `Landing.tsx` currently sends text queries to `/mocks/search`. Change it to call `startSearch({ text, constraints, readyBy, allergies: readAllergies() })` and go to `/search/<id>`. `readyBy` must be an ISO string with an offset.
+- Make sure the server's `meta.readyBy` echoes the request's ISO string verbatim, because the search page's Retry resubmits it.
 
-      | Result | What happens |
-      |---|---|
-      | `patch` | `applyEdit`. On `"stale"`, re-run once. On success, close the popover; the store drives the glow and toast. |
-      | `rejected` | `RejectionCard`; tapping a chip substitutes that suggestion. |
-      | `impossible` | `ImpossibleCard`; "Search instead" goes to `/?q=…`. |
-      | `answer` / `tip` | Show the text and save it with `addTip`. |
+### Task D: wire Phase 7 into the recipe page
+- **`StatsStrip`:** make the servings stepper and the US | Metric toggle work. Keep them in `RecipeEditor` state; they are view-only and never sent to AI.
+- **Ready-by line:** use `readyByStatus` plus a once-a-minute tick. `readyBy` comes from the URL `?readyBy=` (ISO) and is stored on the working copy (`WorkingCopy.readyBy`).
+- **`IngredientList`:** show `formatIngredientQty(scaleIngredient(...), system)`.
+- **`StepList`:** show `stepClockTimes` per step when a ready-by is set, and pass the step text through `convertTemperaturesInText(text, system)`.
 
-   4. Always clear `editing` in `finally`.
+### Task E: Phase 3 chat (being built), then integration
+**Server**, in worktree `agent-a2d09138d944769dd`:
+- `src/lib/ai/chat.ts`: Gemini detects the intent, then routes it:
 
-   **Also:**
-   - While `editing` is set, the target line shimmers and other edits are disabled with "Saffron is editing…".
-   - Errors show inline with a "Try again" button.
-   - Pass `glow.ids` as `glowIds`, keyed by `glow.key`.
-   - Show `EditToast` with Undo, auto-dismissed after 8 s. Ctrl/Cmd+Z also undoes.
-   - Pass `newTipIds` as `openTipIds`.
-   - **Phrase selection:** a mouse selection inside one step's text opens the popover with `target.selectedText`, anchored to the selection rect (Base UI virtual anchor).
-   - Enter or Space on a focused line opens its popover.
-   - Hide "Continue in chat" until Phase 3.
-3. Refactor `RecipeView` and `LinePopover` so props and handlers control them, with the mock states still working.
-4. `src/app/recipe/[sourceId]/page.tsx` renders `RecipeEditor`.
-5. `Landing.tsx` prefills its query from `?q=`. `useSearchParams` needs a Suspense boundary; check the Next 16 docs.
-6. Test in a browser on the butter chicken recipe:
-   - cream → coconut milk: the lines glow, the toast appears, Undo and Ctrl+Z work.
-   - salt → sugar: the rejection card appears with its chips.
-   - Highlight "until charred" (or any phrase), then Explain: the answer streams and a tip appears.
-   - Oven → "I don't have this": the Oven chip disappears.
+  | Intent | Goes to |
+  |---|---|
+  | answer | a plain reply |
+  | decline | a plain reply |
+  | impossible | a result with a suggested search |
+  | targeted edit | `runEdit` with action `ask` |
+  | whole-recipe transform | `src/lib/ai/transform.ts` |
 
-   Task B can be built against temporary stub routes if Task A isn't merged yet. Delete the stubs afterwards.
+- The route is `/api/ai/chat`.
 
-### Then: Phases 3–8 (PRD §14)
-3. Chat panel. 4. Search with the mocked Browser Use agent. 5. Auth.js Google, save/share, My Kitchen. 6. Cook mode, timers, Web Speech voice. 7. Servings scaler, units, ready-by schedule. 8. Deploy, warm the cache, full click-through, rehearse the §3 demo twice.
+**UI**, in worktree `agent-a5f048929344d87b6`:
+- `src/lib/store/chatStore.ts`: localStorage `saffron:chat:<id>`, context chips, and the send flow with undo.
+- `src/lib/api/chatClient.ts`
+- `src/components/chat/ChatDock.tsx`
 
-The PRD lists files, parallel tracks and the cut order if time runs short. The hero flow, URL import and recipe page must never be cut.
+**Contract change:** `recipeStore.editing` becomes `{ target: LineRef | null }`, where null means a whole-recipe edit. There is a new action `beginWholeRecipeEdit()`. `RecipeEditor` must handle a null target when merged.
+
+**Integration after merging:**
+1. Mount `<ChatDock recipeKey={sourceRecipeId} />` in `RecipeEditor`, replacing `AskSaffronFab` in `RecipeView`.
+2. Re-add "Continue in chat →" in `LinePopover`; it calls `useChatStore.getState().attach(ref, label)`.
+
+### Task F: Phase 5 save / share, anonymous first
+There are no Google OAuth credentials (`AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET` are empty). PRD §4's cut order allows a fallback: save under an anonymous device cookie. Recommended design:
+- **Identity:** `src/lib/auth/viewer.ts` (server-only). A `saffron_uid` cookie (httpOnly, random UUID) maps to a `users` row with `google_sub = "anon:<uuid>"`. No migration is needed, since `google_sub` is just a unique text column.
+- **Google later:** add Auth.js v5 when credentials exist, and merge the anonymous user into the Google user at sign-in. Check that `next-auth` supports Next 16.4 before installing.
+- **Routes:** per PRD §9: `POST/GET /api/recipes`, `GET/PATCH /api/recipes/[id]` (owner only), `POST /api/recipes/[id]/share`, `PUT /api/me/allergies`.
+- **Pages:**
+  - `/my/[savedId]`: `RecipeEditor` with `savedId` and autosave debounced to 1 s.
+  - `/s/[slug]`: a read-only `RecipeView`, with **Make it mine** forking it into a new working copy that records `forked_from`.
+  - `/kitchen`: saved recipes plus the allergy sheet, which writes `saffron:allergies` (mocks exist).
+- **Chat history:** moves from localStorage to `chat_messages` on save.
+
+### Task G: Phase 6 cook mode and voice
+The contracts are in `src/lib/voice/types.ts` and the `src/lib/store/cookStore.ts` stub. The UI mocks are in `src/components/cook/*` and `/mocks/cook`.
+1. Implement `cookStore`: focused step, done states, timers with `endsAt` persisted to `saffron:cook:<key>`.
+2. Build the cook UI: Start cooking, dimmed steps, timer chips and tray, a Web Audio chime.
+3. Build `/api/voice/turn` and `src/lib/ai/voice.ts`: one Gemini fast call returning `{say, toolCalls}`. Use a flat schema, since Gemini handles `oneOf` poorly.
+4. Build `src/lib/voice/`:
+   - `wakeword.ts`: a fuzzy "Hey Saffron" regex with tests.
+   - `webspeech.ts`: `WebSpeechProvider`.
+   - `tools.ts`: dispatches tool calls to `cookStore` and to `/api/ai/chat` for `edit_recipe`.
+   - `elevenlabs.ts`: a stub until the key arrives.
+
+### Task H: Phase 8
+1. Deploy (see §6).
+2. Warm the cache with `npm run seed` plus the demo search queries.
+3. Click through the whole site with agent-browser.
+4. Rehearse the §3 demo twice.
 
 ## 4. Conventions that matter
 
 These are all in `CLAUDE.md`; it wins over this file.
 - `src/lib/recipe/schema.ts` and the contracts are frozen. Change them only deliberately, everywhere at once.
-- **No CSS modules.** Light theme only. Next 16.4 differs from most training data, so read `node_modules/next/dist/docs/` before using an unfamiliar API. Cache Components stay off.
+- **No CSS modules.** Light theme only. Next 16.4 differs from most training data, so read `node_modules/next/dist/docs/` before using an unfamiliar API. Cache Components stay off. Error boundaries use `retry` (Next 16.3+), not `reset`.
 - **Every server-side fetch of a user URL goes through `fetchPage`.** It uses curl and contains the SSRF guard.
 - **Scraped or client-supplied text in prompts must be fenced** with `src/lib/ai/untrusted.ts`.
 - **Plain-text prompts must override the JSON-only `SYSTEM_PREAMBLE`.**
+- **Allergies:** the client stores them in localStorage `saffron:allergies` (a JSON string array) until Phase 5, and sends them with every AI request. The server re-checks every suggestion with `containsAllergen`.
 - **Git:** one short branch per person, commit after each working sub-task, keep `main` green, never force-push `main`, never commit `.env*` except `.env.example`. A new env var goes into `.env.example` in the same change.
 - No human reviews code. Have a second agent review every diff before merging.
+- On Windows, 5 parallel builders running `npm ci` and `next build` can exhaust process slots ("fork: Resource temporarily unavailable"). Use 3–4.
 
 ## 5. Gemini quota (the main risk)
 
@@ -159,7 +219,7 @@ Each model has its own cap, which is why `.env.local` points at lite and preview
 - Make live calls only when a prompt or schema changes.
 - Don't retry in loops.
 
-**Billing on the Google AI Studio project must be enabled before demo rehearsals.** The team is waiting on the person who owns the project.
+**Billing on the Google AI Studio project must be enabled before demo rehearsals.** The team is waiting on the person who owns the project. Flash costs very little at hackathon volume.
 
 ## 6. Deploying
 
@@ -168,5 +228,14 @@ Production is a Vultr VM: pm2, Caddy, `/home/saffron/app`.
 - Before the first Phase 1+ deploy:
   - Make sure `curl` is installed on the VM.
   - Update the VM's `/home/saffron/app/.env.local` with the model names from §2 (use `scp`, not git).
-  - Apply the Caddy streaming fix from `REVIEW-TODO.md` item 4.
+  - Copy `deploy/Caddyfile` to `/etc/caddy/Caddyfile` and run `systemctl reload caddy`. It adds the unbuffered explain-stream block.
+- Merge `david/phase-2` into `main` only once the hero flow passes a live test.
 - Don't deploy right before a demo.
+
+## 7. Known gaps and decisions
+
+- **Undo drops tips:** undoing an edit restores the pre-edit snapshot, so tips added after that edit disappear. Accepted for now.
+- **Appliance popovers** don't prefetch alternatives, to save Gemini quota. "I don't have this" runs immediately.
+- **Soy sauce is flagged as gluten** on purpose (most contains wheat). "Nut-free walnut pesto"-style contradictions can slip through the two-word negation strip. That's an accepted trade-off.
+- **Search page:** the mock agent has `liveUrl: null`, so the page shows a placeholder animation. A real Browser Use live URL renders in a sandboxed iframe, https only, with an "Open live view" fallback.
+- **Keys still missing:** Google OAuth, Browser Use, ElevenLabs and the GoDaddy domain. Each one has a stub (PRD §13.1).
