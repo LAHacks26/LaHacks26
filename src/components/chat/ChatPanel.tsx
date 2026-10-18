@@ -38,6 +38,9 @@ export type ChatPanelProps = {
   onSearch?: (query: string) => void;
   /** Shows the typing indicator after the last message. */
   typing?: boolean;
+  busy?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 };
 
 const DESKTOP_QUERY = "(min-width: 640px)";
@@ -65,6 +68,9 @@ export function ChatPanel({
   onUndo,
   onSearch,
   typing = false,
+  busy = false,
+  error,
+  onRetry,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -152,7 +158,7 @@ export function ChatPanel({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || typing || busy) return;
     onSend(text);
     setDraft("");
   }
@@ -232,6 +238,7 @@ export function ChatPanel({
         </div>
       ) : null}
 
+      {error ? <div role="alert" className="px-4 py-2 text-sm">{error} <button type="button" disabled={busy || typing} onClick={onRetry} className="underline">Retry</button></div> : null}
       <form onSubmit={submit} className="flex items-center gap-2 p-3">
         <Input
           ref={inputRef}
@@ -240,13 +247,14 @@ export function ChatPanel({
           placeholder="Ask about this recipe"
           aria-label="Message Saffron"
           autoComplete="off"
+          maxLength={2000}
           className="h-10 flex-1 rounded-full px-4 text-sm"
         />
         <Button
           type="submit"
           size="icon-lg"
           aria-label="Send"
-          disabled={!draft.trim()}
+          disabled={!draft.trim() || typing || busy}
           className="shrink-0 rounded-full"
         >
           <Send aria-hidden="true" />

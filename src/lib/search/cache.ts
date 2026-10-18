@@ -1,9 +1,10 @@
 import "server-only";
-import { and, arrayOverlaps, asc, cosineDistance, isNotNull, lte, not, type SQL } from "drizzle-orm";
+import { and, asc, cosineDistance, isNotNull, lte, type SQL } from "drizzle-orm";
 import { embed } from "../ai/gemini";
 import { getDb } from "../db/client";
 import { sourceRecipes } from "../db/schema";
 import type { CachedItemData } from "./types";
+import { constraintViolations } from "./constraints";
 
 // "Already in Saffron's kitchen" (PRD §10 step 2): embed the dish, then take the closest cached
 // recipes by cosine similarity.
@@ -18,12 +19,6 @@ import type { CachedItemData } from "./types";
 export const SIMILARITY_THRESHOLD = 0.64;
 /** At most this many cached matches are shown. */
 export const CACHE_MATCH_LIMIT = 3;
-
-/** Chip labels that exclude cached recipes by allergen tag. */
-const EXCLUDED_ALLERGEN_BY_CHIP: Record<string, string> = {
-  "Dairy-free": "dairy",
-  "Gluten-free": "gluten",
-};
 
 export type ScoredCachedItem = { item: CachedItemData; similarity: number };
 
@@ -40,11 +35,6 @@ export async function findCachedScored(
   const conditions: SQL[] = [isNotNull(sourceRecipes.embedding), lte(distance, 1 - threshold)];
   if (maxTotalMin !== undefined) conditions.push(lte(sourceRecipes.totalMin, maxTotalMin));
 
-  const excluded = constraints
-    .map((chip) => EXCLUDED_ALLERGEN_BY_CHIP[chip])
-    .filter((tag): tag is string => tag !== undefined);
-  if (excluded.length > 0) conditions.push(not(arrayOverlaps(sourceRecipes.allergens, excluded)));
-
   const rows = await getDb()
     .select({
       id: sourceRecipes.id,
@@ -54,13 +44,16 @@ export async function findCachedScored(
       imageUrl: sourceRecipes.imageUrl,
       allergens: sourceRecipes.allergens,
       distance,
+      recipe: sourceRecipes.recipe,
     })
     .from(sourceRecipes)
     .where(and(...conditions))
     .orderBy(asc(distance))
-    .limit(CACHE_MATCH_LIMIT);
+    // Examine a bounded pool before choosing three so excluded top matches do not hide all alternatives.
+    .limit(constraints.length > 0 ? 30 : CACHE_MATCH_LIMIT);
 
-  return rows.map((row) => ({
+  return rows.filter((row) => constraintViolations(row.recipe, constraints).length === 0)
+    .slice(0, CACHE_MATCH_LIMIT).map((row) => ({
     similarity: 1 - Number(row.distance),
     item: {
       sourceRecipeId: row.id,

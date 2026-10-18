@@ -1,3 +1,4 @@
+import { formatIngredientQty, type UnitSystem } from "@/lib/recipe/units";
 import type { ReactElement, ReactNode } from "react";
 import { AllergenBadge } from "@/components/saffron";
 import type { Ingredient } from "@/lib/recipe/schema";
@@ -46,6 +47,7 @@ export function matchingAllergens(ingredient: Ingredient, allergies: string[]): 
 
 export type IngredientListProps = {
   ingredients: Ingredient[];
+  unit?: UnitSystem;
   allergies: string[];
   selectedId?: string;
   glowIds?: string[];
@@ -80,6 +82,7 @@ function groupIngredients(ingredients: Ingredient[]): Group[] {
 
 export function IngredientList({
   ingredients,
+  unit = "us",
   allergies,
   selectedId,
   glowIds = [],
@@ -124,7 +127,7 @@ export function IngredientList({
                   <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <span>
                       <span className="font-medium tabular-nums">
-                        {[formatQty(ingredient.qty), ingredient.unit].filter(Boolean).join(" ")}
+                        {formatIngredientQty(ingredient, unit)}
                       </span>{" "}
                       {ingredient.item}
                       {ingredient.note ? (

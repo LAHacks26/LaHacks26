@@ -102,6 +102,7 @@ export type LinePopoverProps = {
   /** Another edit is running: edit actions are disabled. */
   editBusy?: boolean;
   onAction?: (action: PopoverAction) => void;
+  onContinueChat?: () => void;
   /** The row or chip that opens the popover. It becomes the trigger. */
   children: ReactElement;
 };
@@ -323,6 +324,7 @@ export function LinePopover({
   editBusy = false,
   onAction,
   children,
+  onContinueChat,
 }: LinePopoverProps) {
   const quick = QUICK_ACTIONS[kind];
   const current = activeActionIndex(kind, mode);
@@ -433,6 +435,7 @@ export function LinePopover({
             ) : null}
 
             {body}
+            {onContinueChat ? <button type="button" onClick={onContinueChat} className="min-h-9 text-left text-sm font-medium text-saffron-ink">Continue in chat →</button> : null}
           </PopoverPrimitive.Popup>
         </PopoverPrimitive.Positioner>
       </PopoverPrimitive.Portal>

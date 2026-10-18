@@ -1,7 +1,7 @@
 import "server-only";
 import type { z } from "zod";
 import { applyEditResult, normalizePatchIds, validatePatch } from "../recipe/patch";
-import type { AiEditResult, PatchOp } from "../recipe/schema";
+import type { AiEditResult, PatchOp, Recipe, LineRef } from "../recipe/schema";
 import type { EditRequestSchema } from "./contracts";
 import { compactRecipe, containsAllergen, describeTarget, filterAllergenSafe, targetName } from "./context";
 import { type FlatEditResult, FlatEditResultSchema, FLAT_EDIT_GEMINI_SCHEMA, checkAiEditResult, flatResultToDraft } from "./editSchema";
@@ -77,10 +77,12 @@ function allergenProblems(ops: PatchOp[], allergies: readonly string[]): string[
   return problems;
 }
 
+type EditContext = { recipe: Recipe; allergies: string[]; target?: LineRef };
+
 type Check = { ok: true; result: AiEditResult } | { ok: false; problems: string[] };
 
 /** Validates one Gemini result against the recipe and the request. Fixes what can be fixed without Gemini. */
-function checkResult(req: EditRequest, flat: FlatEditResult): Check {
+function checkResult(req: EditContext, flat: FlatEditResult): Check {
   const drafted = flatResultToDraft(flat);
   if (!drafted.ok) return { ok: false, problems: drafted.errors };
 
@@ -100,7 +102,7 @@ function checkResult(req: EditRequest, flat: FlatEditResult): Check {
     }
     case "rejected": {
       // A suggestion that is the target itself, or a duplicate, is not a swap.
-      const own = targetName(req.recipe, req.target)?.trim().toLowerCase();
+      const own = (req.target ? targetName(req.recipe, req.target) : undefined)?.trim().toLowerCase();
       const unique = [...new Set(filterAllergenSafe(result.suggestions ?? [], req.allergies))];
       const safe = unique.filter((s) => s.toLowerCase() !== own);
       if (safe.length < 3) {
@@ -113,6 +115,7 @@ function checkResult(req: EditRequest, flat: FlatEditResult): Check {
       break;
     }
     case "tip":
+      if (!req.target) return { ok: false, problems: ["Whole-recipe requests must return an answer or patch, not a line tip."] };
       result = { ...result, target: req.target };
       break;
     default:
@@ -133,10 +136,14 @@ function checkResult(req: EditRequest, flat: FlatEditResult): Check {
 export async function runEdit(req: EditRequest): Promise<AiEditResult> {
   // Missing appliance rewrites more steps, so it gets the smart tier. Both are popover actions, so both use low thinking (PRD §6.1).
   const tier = req.action === "missing_appliance" ? "smart" : "fast";
+  return runValidatedEdit(req, buildEditPrompt(req), tier, "low");
+}
+
+/** Shared patch/allergy validation for targeted edits and whole-recipe transforms. */
+export async function runValidatedEdit(req: EditContext, base: string, tier: "fast" | "smart", thinkingLevel: "low" | "medium"): Promise<AiEditResult> {
   const budgetMs = BUDGET_MS[tier];
   const started = Date.now();
   const remaining = () => budgetMs - (Date.now() - started);
-  const base = buildEditPrompt(req);
 
   let prompt = base;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -148,7 +155,7 @@ export async function runEdit(req: EditRequest): Promise<AiEditResult> {
         system: SYSTEM,
         prompt,
         tier,
-        thinkingLevel: "low",
+        thinkingLevel,
       }),
       remaining(),
     );

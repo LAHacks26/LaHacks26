@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type ReactElement } from "react";
+import { useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { SectionLabel } from "@/components/saffron";
 import type { LineKind, Recipe } from "@/lib/recipe/schema";
 import "./recipe.css";
@@ -17,6 +17,9 @@ import {
 import { RecipeHeader } from "./RecipeHeader";
 import { type ReadyBy, StatsStrip } from "./StatsStrip";
 import { StepList } from "./StepList";
+
+import { scaleIngredient } from "@/lib/recipe/scale";
+import { convertTemperaturesInText, displayTemperatureSelection } from "@/lib/recipe/units";
 
 const DEFAULT_SWAPS = ["coconut yogurt", "oat milk", "silken tofu"];
 
@@ -56,12 +59,17 @@ export type LineTarget = { kind: LineKind; id: string };
 
 export type RecipeViewProps = {
   recipe: Recipe;
+  chatDock?: ReactNode;
+  onContinueChat?: (line: ActiveLine) => void;
   /** The user's allergy list. Matching ingredients get a warning badge. */
   allergies?: string[];
   /** Defaults to the recipe's base servings. */
   servings?: number;
   unit?: "us" | "metric";
   readyBy?: ReadyBy;
+  onServingsChange?: (servings: number) => void;
+  onUnitChange?: (unit: "us" | "metric") => void;
+  stepTimes?: Date[];
   /** Shared view: no popovers, no chat button, no edit toast. */
   readOnly?: boolean;
   /**
@@ -129,10 +137,15 @@ function lineLabel(
 
 export function RecipeView({
   recipe,
+  chatDock,
+  onContinueChat,
   allergies = [],
   servings = recipe.servings,
   unit = "us",
   readyBy,
+  onServingsChange,
+  onUnitChange,
+  stepTimes,
   readOnly = false,
   active,
   onOpenLine,
@@ -197,6 +210,7 @@ export function RecipeView({
           selection={line?.selection}
           editBusy={editBusy}
           onAction={onAction}
+          onContinueChat={line && onContinueChat ? () => onContinueChat(line) : undefined}
         >
           {row}
         </LinePopover>
@@ -219,12 +233,13 @@ export function RecipeView({
       >
         <RecipeHeader recipe={recipe} mode={readOnly ? "readOnly" : "edit"} />
 
-        <StatsStrip recipe={recipe} servings={servings} unit={unit} readyBy={readyBy} />
+        <StatsStrip recipe={recipe} servings={servings} unit={unit} readyBy={readyBy} onServingsChange={onServingsChange} onUnitChange={onUnitChange} />
 
         <section className="flex flex-col gap-3">
           <SectionLabel className="px-3">Ingredients</SectionLabel>
           <IngredientList
-            ingredients={recipe.ingredients}
+            ingredients={recipe.ingredients.map((ingredient) => scaleIngredient(ingredient, servings, recipe.servings))}
+            unit={unit}
             allergies={allergies}
             selectedId={selectedId("ingredient")}
             glowIds={glowIds}
@@ -255,8 +270,9 @@ export function RecipeView({
         <section className="flex flex-col gap-3">
           <SectionLabel className="px-3">Steps</SectionLabel>
           <StepList
-            steps={recipe.steps}
-            highlight={highlight}
+            steps={recipe.steps.map((step) => ({ ...step, text: convertTemperaturesInText(step.text, unit) }))}
+            clockTimes={stepTimes}
+            highlight={highlight ? { ...highlight, text: displayTemperatureSelection(recipe.steps.find((step) => step.id === highlight.stepId)?.text ?? highlight.text, unit, highlight.text) } : undefined}
             glowIds={glowIds}
             glowKey={glowKey}
             selectedId={selectedId("step")}
@@ -267,7 +283,7 @@ export function RecipeView({
         </section>
       </article>
 
-      {interactive ? <AskSaffronFab /> : null}
+      {interactive ? (chatDock ?? <AskSaffronFab />) : null}
       {interactive && toast ? (
         <EditToast
           summary={toast.summary}

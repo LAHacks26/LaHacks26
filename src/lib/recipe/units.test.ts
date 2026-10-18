@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalTemperatureSelection,
+  displayTemperatureSelection,
   convertIngredient,
   convertQty,
   convertTemperaturesInText,
@@ -465,4 +467,26 @@ describe("formatIngredientQty", () => {
   it("uses the same rounding as scale.ts for the qty", () => {
     expect(formatIngredientQty(ingredient({ qty: 1.95, unit: null }), "us")).toBe("2");
   });
+});
+
+
+describe("canonicalTemperatureSelection", () => {
+  it("maps rounded metric temperatures back without reverse-conversion drift", () => {
+    expect(canonicalTemperatureSelection("Bake at 350°F for 20 minutes.", "metric", "175°C")).toBe("350°F");
+  });
+  it("maps a phrase across multiple conversions", () => {
+    expect(canonicalTemperatureSelection("Start at 350°F then 400°F until brown.", "metric", "175°C then 205°C until brown")).toBe("350°F then 400°F until brown");
+  });
+  it("expands a selection inside a converted token", () => {
+    expect(canonicalTemperatureSelection("Use 350°F.", "metric", "175")).toBe("350°F");
+  });
+  it("preserves dual-scale text and rejects unrelated selections", () => {
+    expect(canonicalTemperatureSelection("Use 350°F (175°C).", "metric", "175°C")).toBe("175°C");
+    expect(canonicalTemperatureSelection("Stir well.", "metric", "timer")).toBeNull();
+  });
+});
+
+it("keeps highlights on the selected half of a dual-scale temperature", () => {
+  expect(displayTemperatureSelection("Bake at 350°F (175°C).", "metric", "350°F")).toBe("350°F");
+  expect(displayTemperatureSelection("Bake at 350°F.", "metric", "350°F")).toBe("175°C");
 });

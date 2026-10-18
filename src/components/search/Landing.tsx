@@ -4,6 +4,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Chip } from "@/components/saffron";
 import { isRecipeUrl } from "@/lib/mocks/search";
+import { readAllergies } from "@/lib/allergies";
+import { landingDestination } from "@/lib/search/landing";
+import { SEARCH_FALLBACK_ERROR, SearchClientError } from "@/lib/search/client";
 import { ConstraintChips } from "./ConstraintChips";
 import { SearchBox } from "./SearchBox";
 import "./search.css";
@@ -35,41 +38,13 @@ const IMPORT_TIMEOUT_MS = 60_000;
 const IMPORT_FALLBACK_ERROR = "Couldn't import that page. Try another link.";
 const IMPORT_TIMEOUT_ERROR = "That page took too long. Try another link.";
 
-/** An error whose message comes from the server's `error` field, safe to show. Anything else uses the fallback. */
-class ImportError extends Error {}
-
-/** Reads the `error` field of a non-2xx response, or falls back to a fixed message. */
-async function readImportError(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { error?: unknown };
-    if (typeof body.error === "string" && body.error.trim()) {
-      return body.error;
-    }
-  } catch {
-    // Not JSON. Use the fallback.
-  }
-  return IMPORT_FALLBACK_ERROR;
-}
-
-/** Reads the recipe ID from a 200 response, or throws the fallback error. */
-async function readSourceRecipeId(response: Response): Promise<string> {
-  try {
-    const body = (await response.json()) as { sourceRecipeId?: unknown };
-    if (typeof body.sourceRecipeId === "string" && body.sourceRecipeId) {
-      return body.sourceRecipeId;
-    }
-  } catch {
-    // Not JSON. Fall through to the fallback.
-  }
-  throw new ImportError(IMPORT_FALLBACK_ERROR);
-}
-
 export function Landing() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [constraints, setConstraints] = useState<string[]>([]);
-  const [readyBy, setReadyBy] = useState("19:30");
+  const [readyBy, setReadyBy] = useState("");
   const [importing, setImporting] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [statusIndex, setStatusIndex] = useState(0);
   const importAbort = useRef<AbortController | null>(null);
@@ -113,15 +88,10 @@ export function Landing() {
   }
 
   async function submit() {
-    if (importing || !query.trim()) {
+    if (importAbort.current || !query.trim()) {
       return;
     }
-    // A pasted link imports the recipe directly. Otherwise the mock search
-    // screen shows its fixture results.
-    if (!isRecipeUrl(query)) {
-      router.push("/mocks/search?state=running");
-      return;
-    }
+    const isImport = isRecipeUrl(query);
 
     // One controller covers both the timeout and the unmount abort. The timeout sets
     // `timedOut` first, so the catch block can tell the two apart.
@@ -130,33 +100,33 @@ export function Landing() {
     const timer = window.setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, IMPORT_TIMEOUT_MS);
+    }, isImport ? IMPORT_TIMEOUT_MS : 15_000);
     importAbort.current = controller;
-    setImporting(true);
+    setImporting(isImport);
+    setSearching(!isImport);
     setStatusIndex(0);
     setImportError(null);
 
     try {
-      const response = await fetch("/api/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: query.trim() }),
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        throw new ImportError(await readImportError(response));
-      }
-      const sourceRecipeId = await readSourceRecipeId(response);
+      const href = await landingDestination(
+        { query, constraints, readyBy, allergies: readAllergies() },
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
       // Stay busy until the navigation replaces this screen.
-      router.push(`/recipe/${sourceRecipeId}`);
+      router.push(href);
     } catch (error) {
       if (timedOut) {
-        setImportError(IMPORT_TIMEOUT_ERROR);
+        setImportError(isImport ? IMPORT_TIMEOUT_ERROR : "Starting the search took too long. Try again.");
         setImporting(false);
+        setSearching(false);
+        importAbort.current = null;
       } else if (!controller.signal.aborted) {
         // Only server messages and the fallback reach the user. Raw JS errors never do.
-        setImportError(error instanceof ImportError ? error.message : IMPORT_FALLBACK_ERROR);
+        setImportError(error instanceof SearchClientError ? error.message : isImport ? IMPORT_FALLBACK_ERROR : SEARCH_FALLBACK_ERROR);
         setImporting(false);
+        setSearching(false);
+        importAbort.current = null;
       }
       // Otherwise the component unmounted and the abort was intentional: stay silent.
     } finally {
@@ -186,16 +156,18 @@ export function Landing() {
           value={query}
           onChange={changeQuery}
           onSubmit={submit}
-          busy={importing}
+          busy={importing || searching}
           inputRef={inputRef}
         />
         {/* Always mounted so screen readers announce each status change. */}
         <p
           aria-live="polite"
-          className={`text-center text-sm ${importing || importError ? "mt-2 min-h-5" : ""}`}
+          className={`text-center text-sm ${importing || searching || importError ? "mt-2 min-h-5" : ""}`}
         >
           {importError ? (
             <span role="alert" className="font-medium text-tomato-ink">{importError}</span>
+          ) : searching ? (
+            <span className="text-muted-foreground">Starting your search…</span>
           ) : importing ? (
             <span
               key={statusIndex}

@@ -13,6 +13,8 @@ export type StatsStripProps = {
   unit: "us" | "metric";
   /** Display strings, already formatted (for example "6:35 PM" and "7:30"). */
   readyBy?: ReadyBy;
+  onServingsChange?: (servings: number) => void;
+  onUnitChange?: (unit: "us" | "metric") => void;
   className?: string;
 };
 
@@ -21,7 +23,7 @@ const UNITS = [
   { value: "metric", label: "Metric" },
 ] as const;
 
-export function StatsStrip({ recipe, servings, unit, readyBy, className }: StatsStripProps) {
+export function StatsStrip({ recipe, servings, unit, readyBy, onServingsChange, onUnitChange, className }: StatsStripProps) {
   const { times, difficulty, cleanup } = recipe;
 
   return (
@@ -54,6 +56,8 @@ export function StatsStrip({ recipe, servings, unit, readyBy, className }: Stats
             <button
               type="button"
               aria-label="Fewer servings"
+              disabled={!onServingsChange || servings <= 1}
+              onClick={() => onServingsChange?.(servings - 1)}
               className="grid size-9 place-items-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <Minus size={14} aria-hidden="true" />
@@ -64,6 +68,8 @@ export function StatsStrip({ recipe, servings, unit, readyBy, className }: Stats
             <button
               type="button"
               aria-label="More servings"
+              disabled={!onServingsChange || servings >= 100}
+              onClick={() => onServingsChange?.(servings + 1)}
               className="grid size-9 place-items-center rounded-full text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <Plus size={14} aria-hidden="true" />
@@ -83,6 +89,8 @@ export function StatsStrip({ recipe, servings, unit, readyBy, className }: Stats
                 key={option.value}
                 type="button"
                 aria-pressed={pressed}
+                disabled={!onUnitChange}
+                onClick={() => onUnitChange?.(option.value)}
                 className={cn(
                   "min-h-8 rounded-full px-3 font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   pressed

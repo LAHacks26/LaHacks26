@@ -58,6 +58,25 @@ afterEach(() => {
 });
 
 describe("load", () => {
+  it("persists a URL deadline, restores it without a query, and preserves edits when overriding it", () => {
+    const store = useRecipeStore.getState();
+    const deadline = "2026-10-18T19:30:00-07:00";
+    store.load(SOURCE_ID, butterChicken, deadline);
+    expect(currentCopy().readyBy).toBe(deadline);
+    expect(JSON.parse(storage.getItem(workingCopyKey(SOURCE_ID))!).readyBy).toBe(deadline);
+    editAndApply(milkPatch("coconut milk"), 0);
+    store.load(SOURCE_ID, butterChicken);
+    expect(currentCopy().readyBy).toBe(deadline);
+    store.load(SOURCE_ID, butterChicken, "invalid");
+    expect(currentCopy().readyBy).toBe(deadline);
+    const later = "2026-10-18T20:30:00-07:00";
+    store.load(SOURCE_ID, butterChicken, later);
+    expect(currentCopy().readyBy).toBe(later);
+    expect(currentCopy().recipe.ingredients[8].item).toBe("coconut milk");
+    expect(currentCopy().undoStack).toHaveLength(1);
+    expect(currentCopy().version).toBe(1);
+  });
+
   it("starts fresh at version 0 when nothing is stored", () => {
     useRecipeStore.getState().load(SOURCE_ID, butterChicken);
     const copy = currentCopy();
