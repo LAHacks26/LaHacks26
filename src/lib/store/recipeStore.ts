@@ -13,6 +13,8 @@ import {
 // Client working copy of the open recipe (PRD §5.4, §5.8, §8.1).
 
 export type RecipeStoreState = {
+  /** Editor identity, independent of the public source (several saves may share a source). */
+  recipeKey: string | null;
   /** null until `load` runs. */
   copy: WorkingCopy | null;
   /** The one edit that may run at a time (Explain is not an edit). Affected lines shimmer while set. */
@@ -31,6 +33,7 @@ export type RecipeStoreActions = {
    * and parses with WorkingCopySchema; otherwise starts fresh at version 0. Clears editing/glow/toast.
    */
   load(sourceRecipeId: string, recipe: Recipe, readyBy?: string): void;
+  loadWorkingCopy(key: string, copy: WorkingCopy, restoreDraft?: boolean): void;
   /** Marks an edit as running, or clears it. */
   setEditing(target: LineRef | null): void;
   beginWholeRecipeEdit(): void;
@@ -74,46 +77,55 @@ function storage(): Storage | null {
   }
 }
 
-function readStoredCopy(sourceRecipeId: string): WorkingCopy | null {
+function readStoredCopy(recipeKey: string): WorkingCopy | null {
   try {
-    const raw = storage()?.getItem(workingCopyKey(sourceRecipeId));
+    const raw = storage()?.getItem(workingCopyKey(recipeKey));
     if (!raw) return null;
     const parsed = WorkingCopySchema.safeParse(JSON.parse(raw));
-    if (!parsed.success || parsed.data.sourceRecipeId !== sourceRecipeId) return null;
+    if (!parsed.success) return null;
     return parsed.data;
   } catch {
     return null;
   }
 }
 
-function persistCopy(copy: WorkingCopy): void {
-  if (!copy.sourceRecipeId) return;
+function persistCopy(copy: WorkingCopy, recipeKey = useRecipeStore.getState().recipeKey): void {
+  // Saved documents load from the owner-checked server, never an old local copy.
+  if (!recipeKey || copy.savedId) return;
   try {
-    storage()?.setItem(workingCopyKey(copy.sourceRecipeId), JSON.stringify(copy));
+    storage()?.setItem(workingCopyKey(recipeKey), JSON.stringify(copy));
   } catch {
     // Private mode or a full quota: the in-memory copy still works for this session.
   }
 }
 
 export const useRecipeStore = create<RecipeStore>()((set, get) => ({
+  recipeKey: null,
   copy: null,
   editing: null,
   glow: null,
   toast: null,
   newTipIds: [],
   load(sourceRecipeId, recipe, readyBy) {
-    const restored = readStoredCopy(sourceRecipeId);
+    const stored = readStoredCopy(sourceRecipeId);
+    const restored = stored?.sourceRecipeId === sourceRecipeId && !stored.savedId ? stored : null;
     const deadline = parseReadyBy(readyBy);
     const copy = restored ?? { recipe, version: 0, undoStack: [], sourceRecipeId };
     const next = deadline ? { ...copy, readyBy: deadline } : copy;
-    if (deadline) persistCopy(next);
+    if (deadline) persistCopy(next, sourceRecipeId);
     set({
+      recipeKey: sourceRecipeId,
       copy: next,
       editing: null,
       glow: null,
       toast: null,
       newTipIds: [],
     });
+  },
+  loadWorkingCopy(recipeKey, copy, restoreDraft = false) {
+    const stored = restoreDraft ? readStoredCopy(recipeKey) : null;
+    const next = stored && !stored.savedId ? stored : copy;
+    set({ recipeKey, copy: next, editing: null, glow: null, toast: null, newTipIds: [] });
   },
   setEditing(target) {
     set({ editing: target ? { target } : null });

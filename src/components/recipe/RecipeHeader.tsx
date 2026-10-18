@@ -1,12 +1,14 @@
 import type { Recipe } from "@/lib/recipe/schema";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 
 export type RecipeHeaderProps = {
   recipe: Recipe;
   mode: "edit" | "readOnly";
+  actions?: ReactNode;
 };
 
-export function RecipeHeader({ recipe, mode }: RecipeHeaderProps) {
+export function RecipeHeader({ recipe, mode, actions }: RecipeHeaderProps) {
   const { title, source } = recipe;
   const readOnly = mode === "readOnly";
 
@@ -38,7 +40,7 @@ export function RecipeHeader({ recipe, mode }: RecipeHeaderProps) {
         </div>
 
         <div className="flex flex-wrap gap-2 sm:shrink-0">
-          {readOnly ? (
+          {actions ?? (readOnly ? (
             <>
               <Button variant="outline" size="lg">
                 Start cooking
@@ -55,7 +57,7 @@ export function RecipeHeader({ recipe, mode }: RecipeHeaderProps) {
               </Button>
               <Button size="lg">Start cooking</Button>
             </>
-          )}
+          ))}
         </div>
       </div>
     </header>

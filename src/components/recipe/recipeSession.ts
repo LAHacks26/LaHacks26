@@ -2,13 +2,13 @@ import type { LineRef } from "@/lib/recipe/schema";
 import { useRecipeStore, type RecipeStoreState } from "@/lib/store/recipeStore";
 
 /** Owns requests and the edit lock for one mounted recipe editor. Never persisted. */
-export function createRecipeSession(sourceRecipeId: string) {
+export function createRecipeSession(recipeKey: string) {
   const controller = new AbortController();
   let ownedEdit: RecipeStoreState["editing"] = null;
 
   function currentCopy() {
-    const copy = useRecipeStore.getState().copy;
-    return !controller.signal.aborted && copy?.sourceRecipeId === sourceRecipeId ? copy : null;
+    const state = useRecipeStore.getState();
+    return !controller.signal.aborted && state.recipeKey === recipeKey ? state.copy : null;
   }
 
   function finishEdit() {
@@ -25,7 +25,7 @@ export function createRecipeSession(sourceRecipeId: string) {
 
   // Invalidate permanently on navigation, including A → B → A before a response arrives.
   const unsubscribe = useRecipeStore.subscribe((state) => {
-    if (state.copy?.sourceRecipeId !== sourceRecipeId) dispose();
+    if (state.recipeKey !== recipeKey) dispose();
   });
 
   return {

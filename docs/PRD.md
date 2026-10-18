@@ -149,6 +149,8 @@ Stretch items → unit toggle → per-step clock times → chat persistence in t
 - Persona: a calm, concise sous-chef. Voice replies are 1–2 sentences.
 
 ### 5.8 Accounts, saving and sharing
+**MVP decision, approved 2026-10-18:** use anonymous device-cookie ownership in place of Google sign-in below. Save/share and allergy sync establish a browser identity; all private reads/writes remain owner-checked. Losing or expiring the cookie loses access; no cross-device recovery or account linking exists yet. See `docs/ANONYMOUS_SAVES.md` for the implemented behavior and limits. Google sign-in remains deferred.
+
 - **No login wall.** Search, viewing, editing, chat and cook mode all work signed out, on a **working copy** kept in localStorage.
 - **Save** or **Share** → Google sign-in (Auth.js) → the user returns to the same page with the working copy intact, and it is saved. Once saved, each change **autosaves** (debounced 1s).
 - **My Kitchen** `/kitchen`: grid of saved recipes, plus the allergy settings.

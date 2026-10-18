@@ -15,7 +15,7 @@ export function createChatSession(recipeKey: string) {
       if (chat.recipeKey !== recipeKey || chat.busy || !text.trim() || text.length > 2000 || !session.beginEdit(null)) return;
       chat.setBusy(true);
       chat.setError(null);
-      if (!retry) chat.append({ role: "user", content: text.trim() });
+      if (!retry) chat.append({ role: "user", content: text.trim(), contextRefs: chat.chips.map(({ ref }) => ref) });
       const messages = useChatStore.getState().messages.slice(-20).map(({ role, content }) => ({ role, content: content.slice(0, 2000) }));
       try {
         for (let attempt = 0; attempt < 2; attempt++) {
