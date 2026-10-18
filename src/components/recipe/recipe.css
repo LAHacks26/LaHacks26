@@ -1,0 +1,25 @@
+/* Global stylesheet for the recipe components (Turbopack treats every .css as global).
+   Saffron glow on lines an edit touched. Fades over --glow-duration (2s by default).
+   With reduced motion, the line gets a static soft highlight instead. */
+
+.recipe-glow {
+  animation: recipe-glow-fade var(--glow-duration, 2s) ease-out;
+}
+
+@keyframes recipe-glow-fade {
+  from {
+    background-color: var(--saffron-soft);
+    box-shadow: inset 3px 0 0 var(--saffron);
+  }
+  to {
+    background-color: transparent;
+    box-shadow: inset 3px 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recipe-glow {
+    animation: none;
+    background-color: var(--saffron-soft);
+  }
+}
