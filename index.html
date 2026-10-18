@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RecipeOS — Intelligent, Interactive Recipe Platform</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cream: '#FDFBF7',
+                        warmSand: '#F5F0EA',
+                        charcoal: '#2D312E',
+                        sage: '#5B7065',
+                        sageDark: '#45554E',
+                        sageLight: '#E8EDE9',
+                        terracotta: '#D47357',
+                        terracottaLight: '#F7ECE8',
+                        softGray: '#EFECE6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+                        serif: ['Lora', 'Georgia', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter & Lora -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #FDFBF7; color: #2D312E; }
+        .font-serif { font-family: 'Lora', Georgia, serif; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #F5F0EA; }
+        ::-webkit-scrollbar-thumb { background: #5B7065; border-radius: 3px; }
+    </style>
+</head>
+<body class="h-full flex flex-col selection:bg-sageLight selection:text-sageDark">
+
+    <div id="app" class="flex flex-col min-h-full">
+        <!-- Navigation Header -->
+        <header class="sticky top-0 z-40 bg-cream/90 backdrop-blur-md border-b border-warmSand px-4 lg:px-8 py-3 transition-all">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="router.navigate('home')">
+                    <div class="w-10 h-10 rounded-xl bg-sage flex items-center justify-center text-white shadow-sm">
+                        <i data-lucide="chef-hat" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <span class="text-xl font-bold font-serif tracking-tight text-charcoal">RecipeOS</span>
+                        <span class="hidden sm:inline-block ml-2 px-2 py-0.5 text-xs font-medium bg-sageLight text-sageDark rounded-full">LA Hacks 2026</span>
+                    </div>
+                </div>
+
+                <nav class="hidden md:flex items-center space-x-1 font-medium text-sm text-charcoal/80">
+                    <button onclick="router.navigate('home')" class="nav-btn px-3 py-2 rounded-lg hover:bg-warmSand transition-colors" data-view="home">Home</button>
+                    <button onclick="router.navigate('explore')" class="nav-btn px-3 py-2 rounded-lg hover:bg-warmSand transition-colors" data-view="explore">Explore Recipes</button>
+                    <button onclick="router.navigate('my-recipes')" class="nav-btn px-3 py-2 rounded-lg hover:bg-warmSand transition-colors" data-view="my-recipes">My Recipes</button>
+                    <button onclick="router.navigate('kitchen-profile')" class="nav-btn px-3 py-2 rounded-lg hover:bg-warmSand transition-colors" data-view="kitchen-profile">Kitchen Profile</button>
+                </nav>
+
+                <div class="flex items-center space-x-3">
+                    <button onclick="openImportModal()" class="hidden sm:inline-flex items-center space-x-1.5 px-3.5 py-2 text-xs font-semibold bg-warmSand text-charcoal rounded-lg hover:bg-softGray transition-colors">
+                        <i data-lucide="link" class="w-3.5 h-3.5"></i>
+                        <span>Import URL</span>
+                    </button>
+                    <button onclick="openSettingsModal()" class="p-2 text-charcoal/70 hover:text-charcoal hover:bg-warmSand rounded-lg transition-colors relative" title="API Settings">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                        <span id="api-status-dot" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500" title="Demo mode / No API key"></span>
+                    </button>
+                    <button onclick="toggleMobileMenu()" class="md:hidden p-2 text-charcoal/80 hover:bg-warmSand rounded-lg">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                </div>
+            </div>
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="hidden md:hidden pt-3 pb-2 border-t border-warmSand mt-3 space-y-1">
+                <button onclick="router.navigate('home'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-lg hover:bg-warmSand font-medium text-sm">Home</button>
+                <button onclick="router.navigate('explore'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-lg hover:bg-warmSand font-medium text-sm">Explore Recipes</button>
+                <button onclick="router.navigate('my-recipes'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-lg hover:bg-warmSand font-medium text-sm">My Recipes</button>
+                <button onclick="router.navigate('kitchen-profile'); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-lg hover:bg-warmSand font-medium text-sm">Kitchen Profile</button>
+                <button onclick="openImportModal(); toggleMobileMenu();" class="block w-full text-left px-3 py-2 rounded-lg bg-sage text-white font-medium text-sm">Import Recipe URL</button>
+            </div>
+        </header>
+
+        <!-- Main Dynamic View Container -->
+        <main id="main-content" class="flex-1 flex flex-col">
+            <!-- Dynamically rendered views will mount here -->
+        </main>
+
+        <!-- Floating AI Assistant Button & Drawer -->
+        <div class="fixed bottom-6 right-6 z-50">
+            <button id="ai-fab" onclick="toggleAIChat()" class="flex items-center space-x-2 bg-sage hover:bg-sageDark text-white px-5 py-3.5 rounded-full shadow-lg hover:shadow-xl transition-all font-medium text-sm group">
+                <i data-lucide="sparkles" class="w-5 h-5 animate-pulse text-amber-300"></i>
+                <span>Ask RecipeOS AI</span>
+            </button>
+        </div>
+
+        <!-- AI Assistant Chat Sidebar / Modal -->
+        <div id="ai-chat-drawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-[440px] bg-white shadow-2xl border-l border-warmSand transform translate-x-full transition-transform duration-300 flex flex-col">
+            <div class="p-4 border-b border-warmSand flex items-center justify-between bg-sage text-white">
+                <div class="flex items-center space-x-2">
+                    <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+                    <h3 class="font-serif font-semibold text-base">RecipeOS Assistant</h3>
+                </div>
+                <button onclick="toggleAIChat()" class="p-1.5 rounded-lg hover:bg-white/10 text-white transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Context Banner -->
+            <div id="ai-context-banner" class="hidden bg-sageLight px-4 py-2 text-xs text-sageDark border-b border-warmSand flex items-center justify-between">
+                <span id="ai-context-text" class="truncate font-medium">Selected Context: None</span>
+                <button onclick="clearAIContext()" class="text-charcoal/60 hover:text-charcoal underline ml-2">Clear</button>
+            </div>
+            <!-- Chat Messages Area -->
+            <div id="ai-messages" class="flex-1 overflow-y-auto p-4 space-y-4 bg-cream/50">
+                <div class="flex items-start space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-sage text-white flex items-center justify-center shrink-0">
+                        <i data-lucide="bot" class="w-4 h-4"></i>
+                    </div>
+                    <div class="bg-white p-3.5 rounded-2xl rounded-tl-none shadow-sm border border-warmSand text-sm text-charcoal">
+                        <p class="font-medium mb-1">Hello! I'm your intelligent cooking assistant.</p>
+                        <p class="text-charcoal/80">Ask me anything about the recipe, request ingredient substitutions, or click any ingredient/step in the recipe to ask specific questions!</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Quick Suggestions -->
+            <div id="ai-suggestions" class="p-2 bg-warmSand/60 border-t border-warmSand flex flex-wrap gap-1.5">
+                <button onclick="sendQuickPrompt('Can I make this without dairy?')" class="text-xs bg-white border border-warmSand px-2.5 py-1 rounded-full text-charcoal hover:bg-sageLight transition-colors">Dairy-free?</button>
+                <button onclick="sendQuickPrompt('What can I substitute for the main ingredient?')" class="text-xs bg-white border border-warmSand px-2.5 py-1 rounded-full text-charcoal hover:bg-sageLight transition-colors">Substitutions?</button>
+                <button onclick="sendQuickPrompt('Can I prepare any of this ahead of time?')" class="text-xs bg-white border border-warmSand px-2.5 py-1 rounded-full text-charcoal hover:bg-sageLight transition-colors">Prep ahead?</button>
+            </div>
+            <!-- Chat Input -->
+            <div class="p-3 border-t border-warmSand bg-white">
+                <form onsubmit="handleAIChatSubmit(event)" class="flex items-center space-x-2">
+                    <input type="text" id="ai-input" placeholder="Ask a question or request a change..." class="flex-1 px-4 py-2.5 bg-cream border border-warmSand rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage text-charcoal">
+                    <button type="submit" class="bg-sage hover:bg-sageDark text-white p-2.5 rounded-xl transition-colors">
+                        <i data-lucide="send" class="w-4 h-4"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Recipe Import Modal -->
+        <div id="import-modal" class="fixed inset-0 z-50 bg-charcoal/40 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-warmSand relative animate-in fade-in zoom-in duration-200">
+                <button onclick="closeImportModal()" class="absolute top-4 right-4 p-1.5 text-charcoal/60 hover:text-charcoal rounded-lg hover:bg-warmSand">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-sageLight text-sageDark flex items-center justify-center">
+                        <i data-lucide="link" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-serif font-bold text-charcoal">Import Recipe from URL</h3>
+                        <p class="text-xs text-charcoal/60">Paste any recipe URL to parse with Schema.org & AI</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-charcoal/70 uppercase tracking-wider mb-1">Recipe URL</label>
+                        <input type="url" id="import-url-input" placeholder="https://www.allrecipes.com/recipe/..." class="w-full px-4 py-3 bg-cream border border-warmSand rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage">
+                    </div>
+                    <div class="bg-warmSand/50 p-3.5 rounded-xl text-xs text-charcoal/70 space-y-1">
+                        <p class="font-semibold text-charcoal flex items-center"><i data-lucide="info" class="w-3.5 h-3.5 mr-1 text-sage"></i> Note on External Import:</p>
+                        <p>RecipeOS uses server-side Schema.org JSON-LD extraction and AI normalization. For demo testing without live internet fetch, try pasting a sample URL or use one of our preloaded recipes.</p>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-2">
+                        <button onclick="closeImportModal()" class="px-4 py-2 text-sm font-medium text-charcoal/70 hover:bg-warmSand rounded-xl">Cancel</button>
+                        <button onclick="submitRecipeImport()" class="px-5 py-2 text-sm font-semibold bg-sage hover:bg-sageDark text-white rounded-xl shadow-sm transition-colors flex items-center space-x-2">
+                            <i data-lucide="download" class="w-4 h-4"></i>
+                            <span>Import Recipe</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- API Settings Modal -->
+        <div id="settings-modal" class="fixed inset-0 z-50 bg-charcoal/40 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-warmSand relative">
+                <button onclick="closeSettingsModal()" class="absolute top-4 right-4 p-1.5 text-charcoal/60 hover:text-charcoal rounded-lg hover:bg-warmSand">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-sageLight text-sageDark flex items-center justify-center">
+                        <i data-lucide="key" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-serif font-bold text-charcoal">Gemini API Settings</h3>
+                        <p class="text-xs text-charcoal/60">Configure live AI capabilities</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-charcoal/70 uppercase tracking-wider mb-1">Gemini API Key</label>
+                        <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full px-4 py-3 bg-cream border border-warmSand rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage">
+                        <p class="text-[11px] text-charcoal/60 mt-1">Your key is stored securely in your browser's localStorage and never shared.</p>
+                    </div>
+                    <div class="flex items-center justify-between pt-2">
+                        <button onclick="clearApiKey()" class="text-xs text-terracotta hover:underline font-medium">Remove Key</button>
+                        <div class="space-x-2">
+                            <button onclick="closeSettingsModal()" class="px-4 py-2 text-sm font-medium text-charcoal/70 hover:bg-warmSand rounded-xl">Cancel</button>
+                            <button onclick="saveApiKey()" class="px-5 py-2 text-sm font-semibold bg-sage hover:bg-sageDark text-white rounded-xl shadow-sm">Save Key</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Change Proposal & Diff Modal -->
+        <div id="proposal-modal" class="fixed inset-0 z-50 bg-charcoal/40 backdrop-blur-sm hidden items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-warmSand relative max-h-[90vh] overflow-y-auto">
+                <button onclick="closeProposalModal()" class="absolute top-4 right-4 p-1.5 text-charcoal/60 hover:text-charcoal rounded-lg hover:bg-warmSand">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+                <div class="flex items-center space-x-3 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                        <i data-lucide="git-pull-request" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-serif font-bold text-charcoal" id="proposal-title">Proposed Recipe Modification</h3>
+                        <p class="text-xs text-charcoal/60" id="proposal-subtitle">AI has analyzed your request and prepared adapted changes.</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                        <h4 class="text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">AI Explanation & Impact</h4>
+                        <p id="proposal-explanation" class="text-sm text-amber-900 leading-relaxed"></p>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-semibold text-charcoal/70 uppercase tracking-wider mb-2">Proposed Changes Preview</h4>
+                        <div id="proposal-diff-list" class="space-y-2 border border-warmSand rounded-xl p-3 bg-cream">
+                            <!-- Diff items injected here -->
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 pt-4 border-t border-warmSand">
+                        <button onclick="closeProposalModal()" class="px-4 py-2 text-sm font-medium text-charcoal/70 hover:bg-warmSand rounded-xl">Cancel</button>
+                        <button onclick="applyProposedRecipe()" class="px-6 py-2.5 text-sm font-semibold bg-sage hover:bg-sageDark text-white rounded-xl shadow-md transition-colors flex items-center space-x-2">
+                            <i data-lucide="check" class="w-4 h-4"></i>
+                            <span>Apply Changes</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="bg-warmSand border-t border-softGray py-8 px-4 lg:px-8 mt-auto text-center text-xs text-charcoal/70">
+            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center space-x-2">
+                    <span class="font-serif font-bold text-charcoal text-sm">RecipeOS</span>
+                    <span>— Intelligent Cooking for LA Hacks 2026</span>
+                </div>
+                <p>Built with Next-Gen AI & Schema.org Recipe Parsing. All recipes adapt to your kitchen.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // --- Core Data & State Management ---
+        const DEFAULT_RECIPES = [
+            {
+                id: 'garlic-chicken-pasta',
+                title: 'Creamy Garlic Chicken Pasta',
+                description: 'A comforting, velvety pasta dish featuring tender chicken breast, aromatic garlic, and rich cream sauce finished with parmesan.',
+                sourceName: 'RecipeOS Test Kitchen',
+                sourceUrl: '#',
+                imageUrl: 'https://images.unsplash.com/photo-1621996346565-e3d5d6281298?auto=format&fit=crop&w=800&q=80',
+                prepMinutes: 15,
+                cookMinutes: 20,
+                servings: 4,
+                difficulty: 'Intermediate',
+                cleanupDifficulty: 'Medium (2 pots/pans)',
+                equipment: [
+                    { id: 'eq-1', name: 'Large Pot' },
+                    { id: 'eq-2', name: 'Skillet / Cast-Iron' },
+                    { id: 'eq-3', name: 'Cutting Board' },
+                    { id: 'eq-4', name: 'Chef\'s Knife' },
+                    { id: 'eq-5', name: 'Whisk' }
+                ],
+                ingredients: [
+                    { id: 'ing-1', name: 'chicken breast', quantity: 2, unit: 'large', notes: 'boneless, skinless' },
+                    { id: 'ing-2', name: 'heavy cream', quantity: 1, unit: 'cup', notes: 'room temperature' },
+                    { id: 'ing-3', name: 'garlic', quantity: 3, unit: 'cloves', notes: 'minced' },
+                    { id: 'ing-4', name: 'butter', quantity: 2, unit: 'tbsp', notes: 'unsalted' },
+                    { id: 'ing-5', name: 'pasta', quantity: 250, unit: 'g', notes: 'fettuccine or penne' },
+                    { id: 'ing-6', name: 'parmesan cheese', quantity: 0.75, unit: 'cup', notes: 'freshly grated' },
+                    { id: 'ing-7', name: 'salt and black pepper', quantity: 1, unit: 'tsp', notes: 'to taste' },
+                    { id: 'ing-8', name: 'olive oil', quantity: 1, unit: 'tbsp', notes: '' }
+                ],
+                steps: [
+                    { id: 'step-1', instruction: 'Bring a large pot of salted water to a boil. Add the pasta and cook according to package instructions until al dente. Drain and reserve 1/2 cup pasta water.', ingredientIds: ['ing-5', 'ing-7'], equipmentIds: ['eq-1'], durationMinutes: 10 },
+                    { id: 'step-2', instruction: 'Pat the chicken breasts dry with paper towels, season generously with salt and pepper.', ingredientIds: ['ing-1', 'ing-7'], equipmentIds: ['eq-3'], durationMinutes: 3 },
+                    { id: 'step-3', instruction: 'Heat olive oil and 1 tbsp butter in a large skillet over medium-high heat. Sear chicken for 5-7 minutes per side until golden brown and cooked through (internal temp 165°F). Remove and let rest before slicing.', ingredientIds: ['ing-1', 'ing-4', 'ing-8', 'ing-7'], equipmentIds: ['eq-2'], durationMinutes: 14 },
+                    { id: 'step-4', instruction: 'In the same skillet, melt remaining butter over medium heat. Add minced garlic and sauté for 1 minute until fragrant, being careful not to burn.', ingredientIds: ['ing-3', 'ing-4'], equipmentIds: ['eq-2'], durationMinutes: 2 },
+                    { id: 'step-5', instruction: 'Pour in heavy cream and bring to a gentle simmer. Reduce heat and let it thicken slightly for 3-4 minutes.', ingredientIds: ['ing-2'], equipmentIds: ['eq-2'], durationMinutes: 4 },
+                    { id: 'step-6', instruction: 'Stir in freshly grated parmesan cheese until melted and smooth. Toss in cooked pasta and sliced chicken, adding reserved pasta water if needed to loosen the sauce. Serve warm.', ingredientIds: ['ing-5', 'ing-1', 'ing-6'], equipmentIds: ['eq-2'], durationMinutes: 3 }
+                ]
+            },
+            {
+                id: 'pan-seared-salmon',
+                title: 'Pan-Seared Salmon with Lemon Herb Butter',
+                description: 'Crispy-skinned salmon fillets bathed in a zesty garlic, herb, and butter reduction.',
+                sourceName: 'Coastal Kitchen',
+                sourceUrl: '#',
+                imageUrl: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=80',
+                prepMinutes: 10,
+                cookMinutes: 12,
+                servings: 2,
+                difficulty: 'Beginner',
+                cleanupDifficulty: 'Low (1 skillet)',
+                equipment: [
+                    { id: 'eq-2', name: 'Skillet / Cast-Iron' },
+                    { id: 'eq-3', name: 'Cutting Board' },
+                    { id: 'eq-6', name: 'Spatula' }
+                ],
+                ingredients: [
+                    { id: 'ing-9', name: 'salmon fillets', quantity: 2, unit: 'fillets', notes: 'skin-on' },
+                    { id: 'ing-10', name: 'olive oil', quantity: 1, unit: 'tbsp', notes: '' },
+                    { id: 'ing-4', name: 'butter', quantity: 2, unit: 'tbsp', notes: 'unsalted' },
+                    { id: 'ing-3', name: 'garlic', quantity: 2, unit: 'cloves', notes: 'minced' },
+                    { id: 'ing-11', name: 'lemon juice', quantity: 2, unit: 'tbsp', notes: 'freshly squeezed' },
+                    { id: 'ing-12', name: 'fresh dill', quantity: 1, unit: 'tbsp', notes: 'chopped' }
+                ],
+                steps: [
+                    { id: 's-1', instruction: 'Pat salmon fillets thoroughly dry with paper towels and season with salt and pepper on both sides.', ingredientIds: ['ing-9'], equipmentIds: ['eq-3'], durationMinutes: 3 },
+                    { id: 's-2', instruction: 'Heat olive oil in a cast-iron skillet over medium-high heat until shimmering.', ingredientIds: ['ing-10'], equipmentIds: ['eq-2'], durationMinutes: 2 },
+                    { id: 's-3', instruction: 'Place salmon skin-side down in the skillet. Press gently for 10 seconds to ensure even contact. Sear undisturbed for 5-6 minutes until skin is crispy.', ingredientIds: ['ing-9'], equipmentIds: ['eq-2'], durationMinutes: 6 },
+                    { id: 's-4', instruction: 'Flip salmon. Add butter, minced garlic, lemon juice, and fresh dill to the pan. Spoon the melted buttery sauce over the salmon for 2-3 minutes until cooked to medium-rare or desired doneness.', ingredientIds: ['ing-4', 'ing-3', 'ing-11', 'ing-12'], equipmentIds: ['eq-2', 'eq-6'], durationMinutes: 3 }
+                ]
+            },
+            {
+                id: 'vegetable-stir-fry',
+                title: 'Crispy Tofu & Vegetable Stir-Fry',
+                description: 'Vibrant, crunchy vegetables and golden tofu tossed in a savory ginger-soy glaze.',
+                sourceName: 'Plant Power Cookbook',
+                sourceUrl: '#',
+                imageUrl: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+                prepMinutes: 15,
+                cookMinutes: 10,
+                servings: 3,
+                difficulty: 'Beginner',
+                cleanupDifficulty: 'Low (1 wok/skillet)',
+                equipment: [
+                    { id: 'eq-7', name: 'Wok or Large Skillet' },
+                    { id: 'eq-3', name: 'Cutting Board' },
+                    { id: 'eq-4', name: 'Chef\'s Knife' }
+                ],
+                ingredients: [
+                    { id: 'ing-13', name: 'firm tofu', quantity: 1, unit: 'block', notes: 'pressed and cubed' },
+                    { id: 'ing-14', name: 'broccoli florets', quantity: 2, unit: 'cups', notes: '' },
+                    { id: 'ing-15', name: 'bell pepper', quantity: 1, unit: 'medium', notes: 'sliced' },
+                    { id: 'ing-16', name: 'soy sauce', quantity: 3, unit: 'tbsp', notes: '' },
+                    { id: 'ing-17', name: 'sesame oil', quantity: 1, unit: 'tbsp', notes: '' },
+                    { id: 'ing-18', name: 'ginger', quantity: 1, unit: 'tbsp', notes: 'grated' }
+                ],
+                steps: [
+                    { id: 'st-1', instruction: 'Press tofu to remove excess moisture and cut into 3/4-inch cubes.', ingredientIds: ['ing-13'], equipmentIds: ['eq-3'], durationMinutes: 5 },
+                    { id: 'st-2', instruction: 'Heat sesame oil in a wok over high heat. Add tofu cubes and pan-fry for 6-8 minutes until golden and crispy on all sides. Remove and set aside.', ingredientIds: ['ing-13', 'ing-17'], equipmentIds: ['eq-7'], durationMinutes: 8 },
+                    { id: 'st-3', instruction: 'In the same wok, toss in broccoli florets and bell pepper slices. Stir-fry for 3-4 minutes until tender-crisp.', ingredientIds: ['ing-14', 'ing-15'], equipmentIds: ['eq-7'], durationMinutes: 4 },
+                    { id: 'st-4', instruction: 'Return tofu to the wok. Pour in soy sauce and grated ginger. Toss everything together for 1 minute until heated through and well coated. Serve hot.', ingredientIds: ['ing-16', 'ing-18', 'ing-13'], equipmentIds: ['eq-7'], durationMinutes: 2 }
+                ]
+            }
+        ];
+
+        // State variables
+        let appState = {
+            currentView: 'home',
+            activeRecipeId: 'garlic-chicken-pasta',
+            savedRecipes: [],
+            kitchenProfile: {
+                appliances: ['Oven', 'Stovetop', 'Cutting Board', 'Skillet / Cast-Iron', 'Large Pot'],
+                skillLevel: 'intermediate',
+                dietary: [],
+                allergies: [],
+                pantry: ['salt', 'pepper', 'olive oil', 'garlic']
+            },
+            apiKey: '',
+            aiContext: null, // { type: 'ingredient' | 'step' | 'equipment', id, name }
+            activeProposal: null, // pending AI modification
+            recipeHistory: {}, // recipeId -> array of versions
+            cookingModeStepIndex: 0
+        };
+
+        // Initialize LocalStorage & State
+        function initApp() {
+            const saved = localStorage.getItem('recipeos_saved');
+            if (saved) {
+                try { appState.savedRecipes = JSON.parse(saved); } catch(e) {}
+            } else {
+                appState.savedRecipes = [DEFAULT_RECIPES[0]]; // Default saved
+            }
+
+            const profile = localStorage.getItem('recipeos_profile');
+            if (profile) {
+                try { appState.kitchenProfile = JSON.parse(profile); } catch(e) {}
+            }
+
+            const key = localStorage.getItem('recipeos_apikey');
+            if (key) {
+                appState.apiKey = key;
+                document.getElementById('api-status-dot').className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500';
+                document.getElementById('api-status-dot').title = 'Gemini API Connected';
+            }
+
+            router.init();
+        }
+
+        // Router
+        const router = {
+            init: function() {
+                window.addEventListener('hashchange', () => this.handleHash());
+                this.handleHash();
+            },
+            navigate: function(view, param) {
+                let hash = `#${view}`;
+                if (param) hash += `/${param}`;
+                window.location.hash = hash;
+            },
+            handleHash: function() {
+                const hash = window.location.hash.slice(1) || 'home';
+                const parts = hash.split('/');
+                const view = parts[0];
+                const param = parts[1];
+
+                appState.currentView = view;
+                if (param && view === 'recipe') {
+                    appState.activeRecipeId = param;
+                } else if (param && view === 'cooking') {
+                    appState.activeRecipeId = param;
+                }
+
+                // Update nav styling
+                document.querySelectorAll('.nav-btn').forEach(btn => {
+                    if (btn.dataset.view === view) {
+                        btn.classList.add('bg-warmSand', 'text-sageDark');
+                    } else {
+                        btn.classList.remove('bg-warmSand', 'text-sageDark');
+                    }
+                });
+
+                renderCurrentView();
+                window.scrollTo(0,0);
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            }
+        };
+
+        // Get current active recipe (checks default + saved + history)
+        function getActiveRecipe() {
+            let recipe = DEFAULT_RECIPES.find(r => r.id === appState.activeRecipeId);
+            if (!recipe) {
+                recipe = appState.savedRecipes.find(r => r.id === appState.activeRecipeId);
+            }
+            return recipe || DEFAULT_RECIPES[0];
+        }
+
+        // Render Views
+        function renderCurrentView() {
+            const container = document.getElementById('main-content');
+            container.innerHTML = '';
+
+            switch(appState.currentView) {
+                case 'home':
+                    container.innerHTML = renderHomeView();
+                    break;
+                case 'explore':
+                    container.innerHTML = renderExploreView();
+                    break;
+                case 'recipe':
+                    container.innerHTML = renderRecipeDetailView();
+                    break;
+                case 'my-recipes':
+                    container.innerHTML = renderMyRecipesView();
+                    break;
+                case 'kitchen-profile':
+                    container.innerHTML = renderKitchenProfileView();
+                    break;
+                case 'cooking':
+                    container.innerHTML = renderCookingModeView();
+                    break;
+                default:
+                    container.innerHTML = renderHomeView();
+            }
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // --- View 1: Homepage ---
+        function renderHomeView() {
+            return `
+                <div class="space-y-16 pb-16">
+                    <!-- Hero Section -->
+                    <section class="relative bg-gradient-to-b from-warmSand/70 to-cream py-20 px-4 lg:px-8 border-b border-warmSand">
+                        <div class="max-w-5xl mx-auto text-center space-y-6">
+                            <span class="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-sageLight text-sageDark text-xs font-semibold tracking-wide">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-sage"></i>
+                                <span>LA Hacks 2026 Applied Intelligence Track</span>
+                            </span>
+                            <h1 class="text-4xl sm:text-6xl font-serif font-bold text-charcoal tracking-tight">
+                                Every recipe. <span class="text-sage italic">Your way.</span>
+                            </h1>
+                            <p class="text-lg sm:text-xl text-charcoal/85 max-w-2xl mx-auto leading-relaxed font-light">
+                                Turn any recipe into a personalized, interactive cooking experience. Ask questions, swap ingredients, and adapt instructions to what you have in your kitchen.
+                            </p>
+                            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+                                <button onclick="router.navigate('explore')" class="w-full sm:w-auto px-8 py-4 bg-sage hover:bg-sageDark text-white font-semibold rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2">
+                                    <i data-lucide="compass" class="w-5 h-5"></i>
+                                    <span>Find a Recipe</span>
+                                </button>
+                                <button onclick="openImportModal()" class="w-full sm:w-auto px-8 py-4 bg-white hover:bg-warmSand text-charcoal border border-warmSand font-semibold rounded-2xl shadow-sm transition-all flex items-center justify-center space-x-2">
+                                    <i data-lucide="link" class="w-5 h-5"></i>
+                                    <span>Import a Recipe URL</span>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Search Bar Section -->
+                    <section class="max-w-3xl mx-auto px-4 -mt-10 relative z-10">
+                        <div class="bg-white p-3 rounded-2xl shadow-xl border border-warmSand flex items-center space-x-3">
+                            <i data-lucide="search" class="w-5 h-5 text-charcoal/40 ml-2"></i>
+                            <input type="text" id="home-search-input" oninput="handleHomeSearch(this.value)" placeholder="Search demo recipes (e.g., Pasta, Salmon, Tofu)..." class="flex-1 py-2 text-sm focus:outline-none text-charcoal">
+                            <button onclick="router.navigate('explore')" class="bg-sage text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-sageDark transition-colors">Explore</button>
+                        </div>
+                    </section>
+
+                    <!-- Featured Recipes -->
+                    <section class="max-w-7xl mx-auto px-4 lg:px-8">
+                        <div class="flex items-center justify-between mb-8">
+                            <div>
+                                <h2 class="text-2xl font-serif font-bold text-charcoal">Featured Interactive Recipes</h2>
+                                <p class="text-sm text-charcoal/70">Click any recipe to experience intelligent adaptation</p>
+                            </div>
+                            <button onclick="router.navigate('explore')" class="text-sm font-semibold text-sage hover:text-sageDark flex items-center space-x-1">
+                                <span>View all</span>
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            ${DEFAULT_RECIPES.map(recipe => `
+                                <div onclick="router.navigate('recipe', '${recipe.id}')" class="bg-white rounded-2xl overflow-hidden border border-warmSand shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col">
+                                    <div class="relative h-48 overflow-hidden bg-warmSand">
+                                        <img src="${recipe.imageUrl}" alt="${recipe.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='https://placehold.co/600x400/5B7065/FFF?text=Recipe'">
+                                        <div class="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-semibold text-charcoal shadow-sm">
+                                            ${recipe.prepMinutes + recipe.cookMinutes} mins
+                                        </div>
+                                    </div>
+                                    <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                        <div>
+                                            <div class="flex items-center space-x-2 text-xs font-medium text-sage mb-1.5">
+                                                <span>${recipe.difficulty}</span>
+                                                <span>•</span>
+                                                <span>${recipe.servings} servings</span>
+                                            </div>
+                                            <h3 class="text-lg font-serif font-bold text-charcoal group-hover:text-sage transition-colors">${recipe.title}</h3>
+                                            <p class="text-xs text-charcoal/70 line-clamp-2 mt-1">${recipe.description}</p>
+                                        </div>
+                                        <div class="pt-3 border-t border-warmSand flex items-center justify-between text-xs text-charcoal/60">
+                                            <span>Source: ${recipe.sourceName}</span>
+                                            <span class="font-semibold text-sage flex items-center">Cook Now <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </section>
+
+                    <!-- Core Value Props -->
+                    <section class="bg-warmSand/50 py-16 px-4 lg:px-8 border-y border-warmSand">
+                        <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div class="bg-white p-6 rounded-2xl border border-warmSand shadow-sm space-y-3">
+                                <div class="w-12 h-12 rounded-xl bg-sageLight text-sageDark flex items-center justify-center">
+                                    <i data-lucide="mouse-pointer-click" class="w-6 h-6"></i>
+                                </div>
+                                <h3 class="font-serif font-bold text-lg text-charcoal">Clickable Ingredients</h3>
+                                <p class="text-xs text-charcoal/70 leading-relaxed">Click any ingredient to ask what it does, find substitutions (e.g. heavy cream to milk), or adapt for dietary needs.</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-warmSand shadow-sm space-y-3">
+                                <div class="w-12 h-12 rounded-xl bg-sageLight text-sageDark flex items-center justify-center">
+                                    <i data-lucide="list-tree" class="w-6 h-6"></i>
+                                </div>
+                                <h3 class="font-serif font-bold text-lg text-charcoal">Smart Instructions</h3>
+                                <p class="text-xs text-charcoal/70 leading-relaxed">Expand step-by-step guidance, get beginner-friendly breakdowns, or request help if you lack specific equipment.</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl border border-warmSand shadow-sm space-y-3">
+                                <div class="w-12 h-12 rounded-xl bg-sageLight text-sageDark flex items-center justify-center">
+                                    <i data-lucide="git-pull-request" class="w-6 h-6"></i>
+                                </div>
+                                <h3 class="font-serif font-bold text-lg text-charcoal">Adaptive Modification Engine</h3>
+                                <p class="text-xs text-charcoal/70 leading-relaxed">When you change an ingredient, RecipeOS intelligently updates dependent cooking steps, times, and methods automatically.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            `;
+        }
+
+        // --- View 2: Explore View ---
+        function renderExploreView() {
+            const allRecipes = [...DEFAULT_RECIPES, ...appState.savedRecipes.filter(sr => !DEFAULT_RECIPES.some(dr => dr.id === sr.id))];
+            return `
+                <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 space-y-8 flex-1 w-full">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <h1 class="text-3xl font-serif font-bold text-charcoal">Explore Recipes</h1>
+                            <p class="text-sm text-charcoal/70">Browse built-in samples and your imported recipes</p>
+                        </div>
+                        <div class="flex items-center space-x-3 w-full sm:w-auto">
+                            <input type="text" id="explore-search" placeholder="Search recipes..." oninput="filterExploreRecipes(this.value)" class="px-4 py-2.5 bg-white border border-warmSand rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sage w-full sm:w-64">
+                            <button onclick="openImportModal()" class="px-4 py-2.5 bg-sage text-white rounded-xl text-sm font-semibold hover:bg-sageDark transition-colors shrink-0 flex items-center space-x-1.5">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Import</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="explore-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        ${allRecipes.map(recipe => `
+                            <div onclick="router.navigate('recipe', '${recipe.id}')" class="bg-white rounded-2xl overflow-hidden border border-warmSand shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col">
+                                <div class="relative h-48 overflow-hidden bg-warmSand">
+                                    <img src="${recipe.imageUrl || 'https://placehold.co/600x400/5B7065/FFF?text=Recipe'}" alt="${recipe.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='https://placehold.co/600x400/5B7065/FFF?text=Recipe'">
+                                    <div class="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-semibold text-charcoal shadow-sm">
+                                        ${(recipe.prepMinutes || 10) + (recipe.cookMinutes || 15)} mins
+                                    </div>
+                                </div>
+                                <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                    <div>
+                                        <div class="flex items-center space-x-2 text-xs font-medium text-sage mb-1.5">
+                                            <span>${recipe.difficulty || 'Intermediate'}</span>
+                                            <span>•</span>
+                                            <span>${recipe.servings} servings</span>
+                                        </div>
+                                        <h3 class="text-lg font-serif font-bold text-charcoal group-hover:text-sage transition-colors">${recipe.title}</h3>
+                                        <p class="text-xs text-charcoal/70 line-clamp-2 mt-1">${recipe.description}</p>
+                                    </div>
+                                    <div class="pt-3 border-t border-warmSand flex items-center justify-between text-xs text-charcoal/60">
+                                        <span>Source: ${recipe.sourceName || 'RecipeOS'}</span>
+                                        <span class="font-semibold text-sage flex items-center">Open Recipe <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function filterExploreRecipes(query) {
+            const q = query.toLowerCase();
+            const allRecipes = [...DEFAULT_RECIPES, ...appState.savedRecipes.filter(sr => !DEFAULT_RECIPES.some(dr => dr.id === sr.id))];
+            const filtered = allRecipes.filter(r => r.title.toLowerCase().includes(q) || r.description.toLowerCase().includes(q));
+            const grid = document.getElementById('explore-grid');
+            if (!grid) return;
+            grid.innerHTML = filtered.map(recipe => `
+                <div onclick="router.navigate('recipe', '${recipe.id}')" class="bg-white rounded-2xl overflow-hidden border border-warmSand shadow-sm hover:shadow-xl transition-all cursor-pointer group flex flex-col">
+                    <div class="relative h-48 overflow-hidden bg-warmSand">
+                        <img src="${recipe.imageUrl || 'https://placehold.co/600x400/5B7065/FFF?text=Recipe'}" alt="${recipe.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='https://placehold.co/600x400/5B7065/FFF?text=Recipe'">
+                        <div class="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs font-semibold text-charcoal shadow-sm">
+                            ${(recipe.prepMinutes || 10) + (recipe.cookMinutes || 15)} mins
+                        </div>
+                    </div>
+                    <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center space-x-2 text-xs font-medium text-sage mb-1.5">
+                                <span>${recipe.difficulty || 'Intermediate'}</span>
+                                <span>•</span>
+                                <span>${recipe.servings} servings</span>
+                            </div>
+                            <h3 class="text-lg font-serif font-bold text-charcoal group-hover:text-sage transition-colors">${recipe.title}</h3>
+                            <p class="text-xs text-charcoal/70 line-clamp-2 mt-1">${recipe.description}</p>
+                        </div>
+                        <div class="pt-3 border-t border-warmSand flex items-center justify-between text-xs text-charcoal/60">
+                            <span>Source: ${recipe.sourceName || 'RecipeOS'}</span>
+                            <span class="font-semibold text-sage flex items-center">Open Recipe <i data-lucide="chevron-right" class="w-3.5 h-3.5 ml-0.5"></i></span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // --- View 3: Recipe Detail View (Core Experience) ---
+        function renderRecipeDetailView() {
+            const recipe = getActiveRecipe();
+            return `
+                <div class="max-w-7xl mx-auto px-4 lg:px-8 py-8 space-y-8 flex-1 w-full">
+                    <!-- Top Actions & Breadcrumb -->
+                    <div class="flex items-center justify-between">
+                        <button onclick="router.navigate('explore')" class="inline-flex items-center space-x-1.5 text-xs font-semibold text-charcoal/70 hover:text-charcoal bg-white px-3 py-1.5 rounded-lg border border-warmSand shadow-sm">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span>Back to Explore</span>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="saveCurrentRecipe()" class="inline-flex items-center space-x-1.5 text-xs font-semibold text-sage bg-sageLight px-3.5 py-2 rounded-xl hover:bg-sage hover:text-white transition-colors">
+                                <i data-lucide="bookmark" class="w-4 h-4"></i>
+                                <span>Save to My Recipes</span>
+                            </button>
+                            <button onclick="router.navigate('cooking', '${recipe.id}')" class="inline-flex items-center space-x-1.5 text-xs font-semibold text-white bg-sage hover:bg-sageDark px-4 py-2 rounded-xl shadow-md transition-colors">
+                                <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                                <span>Start Cooking Mode</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Hero Header Card -->
+                    <div class="bg-white rounded-3xl border border-warmSand overflow-hidden shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-0">
+                        <div class="lg:col-span-5 relative min-h-[300px] lg:min-h-full bg-warmSand">
+                            <img src="${recipe.imageUrl || 'https://placehold.co/600x400/5B7065/FFF?text=Recipe'}" alt="${recipe.title}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x400/5B7065/FFF?text=Recipe'">
+                        </div>
+                        <div class="lg:col-span-7 p-6 sm:p-8 flex flex-col justify-between space-y-6">
+                            <div class="space-y-3">
+                                <div class="flex items-center space-x-2 text-xs font-medium text-charcoal/70">
+                                    <span class="px-2.5 py-1 rounded-full bg-warmSand text-charcoal">Source: <a href="${recipe.sourceUrl || '#'}" target="_blank" class="underline hover:text-sage">${recipe.sourceName || 'RecipeOS'}</a></span>
+                                    <span>•</span>
+                                    <span>Difficulty: <strong class="text-charcoal">${recipe.difficulty || 'Intermediate'}</strong></span>
+                                </div>
+                                <h1 class="text-2xl sm:text-4xl font-serif font-bold text-charcoal">${recipe.title}</h1>
+                                <p class="text-sm text-charcoal/80 leading-relaxed">${recipe.description}</p>
+                            </div>
+
+                            <!-- Quick Stats Grid -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-warmSand">
+                                <div class="bg-warmSand/60 p-3 rounded-2xl text-center">
+                                    <span class="block text-[11px] uppercase tracking-wider text-charcoal/60 font-semibold">Prep Time</span>
+                                    <span class="text-base font-bold text-charcoal">${recipe.prepMinutes || 15} mins</span>
+                                </div>
+                                <div class="bg-warmSand/60 p-3 rounded-2xl text-center">
+                                    <span class="block text-[11px] uppercase tracking-wider text-charcoal/60 font-semibold">Cook Time</span>
+                                    <span class="text-base font-bold text-charcoal">${recipe.cookMinutes || 20} mins</span>
+                                </div>
+                                <div class="bg-warmSand/60 p-3 rounded-2xl text-center">
+                                    <span class="block text-[11px] uppercase tracking-wider text-charcoal/60 font-semibold">Servings</span>
+                                    <span class="text-base font-bold text-charcoal">${recipe.servings}</span>
+                                </div>
+                                <div class="bg-warmSand/60 p-3 rounded-2xl text-center">
+                                    <span class="block text-[11px] uppercase tracking-wider text-charcoal/60 font-semibold">Cleanup</span>
+                                    <span class="text-xs font-bold text-charcoal truncate block">${recipe.cleanupDifficulty || 'Medium'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Equipment You'll Need -->
+                    <div class="bg-white rounded-2xl border border-warmSand p-6 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-serif font-bold text-lg text-charcoal flex items-center space-x-2">
+                                <i data-lucide="wrench" class="w-5 h-5 text-sage"></i>
+                                <span>Equipment You'll Need</span>
+                            </h3>
+                            <span class="text-xs text-charcoal/60">Click any item for alternative methods</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2.5">
+                            ${(recipe.equipment || []).map(eq => `
+                                <button onclick="handleEquipmentClick('${eq.id}', '${eq.name}')" class="inline-flex items-center space-x-2 bg-cream hover:bg-sageLight border border-warmSand px-3.5 py-2 rounded-xl text-xs font-medium text-charcoal transition-colors group">
+                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-sage group-hover:scale-110 transition-transform"></i>
+                                    <span>${eq.name}</span>
+                                    <i data-lucide="help-circle" class="w-3 h-3 text-charcoal/40 ml-1"></i>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Main Two-Column Layout: Ingredients & Instructions -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                        <!-- Ingredients List (Clickable) -->
+                        <div class="lg:col-span-5 bg-white rounded-2xl border border-warmSand p-6 shadow-sm space-y-4 sticky top-24">
+                            <div class="flex items-center justify-between border-b border-warmSand pb-3">
+                                <h3 class="font-serif font-bold text-lg text-charcoal flex items-center space-x-2">
+                                    <i data-lucide="list" class="w-5 h-5 text-sage"></i>
+                                    <span>Ingredients</span>
+                                </h3>
+                                <span class="text-[11px] bg-sageLight text-sageDark px-2.5 py-1 rounded-full font-semibold">Click to Substitute</span>
+                            </div>
+                            <ul class="space-y-2.5">
+                                ${(recipe.ingredients || []).map(ing => `
+                                    <li onclick="handleIngredientClick('${ing.id}', '${ing.name}')" class="flex items-center justify-between p-3 rounded-xl bg-cream hover:bg-sageLight/60 border border-warmSand/60 cursor-pointer transition-all group">
+                                        <div class="flex items-center space-x-3">
+                                            <div class="w-2 h-2 rounded-full bg-sage group-hover:scale-125 transition-transform"></div>
+                                            <span class="text-sm font-medium text-charcoal group-hover:text-sageDark">${ing.quantity || ''} ${ing.unit || ''} <strong class="text-charcoal">${ing.name}</strong></span>
+                                        </div>
+                                        <div class="flex items-center space-x-1 text-xs text-charcoal/50 group-hover:text-sage">
+                                            <span>${ing.notes || ''}</span>
+                                            <i data-lucide="sparkles" class="w-3.5 h-3.5 ml-1 text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+
+                        <!-- Step-by-Step Instructions (Clickable & Expandable) -->
+                        <div class="lg:col-span-7 bg-white rounded-2xl border border-warmSand p-6 shadow-sm space-y-6">
+                            <div class="flex items-center justify-between border-b border-warmSand pb-3">
+                                <h3 class="font-serif font-bold text-lg text-charcoal flex items-center space-x-2">
+                                    <i data-lucide="book-open" class="w-5 h-5 text-sage"></i>
+                                    <span>Cooking Instructions</span>
+                                </h3>
+                                <span class="text-[11px] bg-sageLight text-sageDark px-2.5 py-1 rounded-full font-semibold">Click step for AI guidance</span>
+                            </div>
+                            <ol class="space-y-4">
+                                ${(recipe.steps || []).map((step, idx) => `
+                                    <li id="step-container-${step.id}" class="p-4 rounded-xl bg-cream border border-warmSand/80 hover:border-sage transition-all">
+                                        <div class="flex items-start justify-between cursor-pointer" onclick="handleStepClick('${step.id}', \`${step.instruction.replace(/"/g, '&quot;')}\`)">
+                                            <div class="flex items-start space-x-3.5">
+                                                <span class="w-7 h-7 rounded-lg bg-sage text-white text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">${idx + 1}</span>
+                                                <p class="text-sm text-charcoal font-medium leading-relaxed">${step.instruction}</p>
+                                            </div>
+                                            <button class="text-charcoal/40 hover:text-sage p-1 shrink-0 ml-2" title="Ask AI about this step">
+                                                <i data-lucide="help-circle" class="w-4 h-4"></i>
+                                            </button>
+                                        </div>
+                                        <!-- Expanded Explanation Container (Hidden by default) -->
+                                        <div id="step-expanded-${step.id}" class="hidden mt-3 pt-3 border-t border-warmSand/80 space-y-3 text-xs text-charcoal/80">
+                                            <!-- Dynamically populated or toggled -->
+                                        </div>
+                                    </li>
+                                `).join('')}
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- View 4: My Recipes View ---
+        function renderMyRecipesView() {
+            return `
+                <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 space-y-8 flex-1 w-full">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-3xl font-serif font-bold text-charcoal">My Saved Recipes</h1>
+                            <p class="text-sm text-charcoal/70">Your customized recipes and imported favorites</p>
+                        </div>
+                        <button onclick="openImportModal()" class="px-4 py-2.5 bg-sage text-white rounded-xl text-sm font-semibold hover:bg-sageDark transition-colors flex items-center space-x-1.5">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            <span>Import URL</span>
+                        </button>
+                    </div>
+
+                    ${appState.savedRecipes.length === 0 ? `
+                        <div class="text-center py-20 bg-white rounded-3xl border border-warmSand space-y-4">
+                            <div class="w-16 h-16 bg-warmSand rounded-full flex items-center justify-center mx-auto text-charcoal/40">
+                                <i data-lucide="bookmark" class="w-8 h-8"></i>
+                            </div>
+                            <h3 class="font-serif font-bold text-lg text-charcoal">No saved recipes yet</h3>
+                            <p class="text-xs text-charcoal/60 max-w-sm mx-auto">Explore recipes and click "Save to My Recipes" or import any recipe from the web to keep them here.</p>
+                            <button onclick="router.navigate('explore')" class="px-5 py-2.5 bg-sage text-white text-xs font-semibold rounded-xl">Explore Recipes</button>
+                        </div>
+                    ` : `
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            ${appState.savedRecipes.map(recipe => `
+                                <div class="bg-white rounded-2xl overflow-hidden border border-warmSand shadow-sm hover:shadow-xl transition-all flex flex-col">
+                                    <div class="relative h-48 overflow-hidden bg-warmSand cursor-pointer" onclick="router.navigate('recipe', '${recipe.id}')">
+                                        <img src="${recipe.imageUrl || 'https://placehold.co/600x400/5B7065/FFF?text=Recipe'}" alt="${recipe.title}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/600x400/5B7065/FFF?text=Recipe'">
+                                    </div>
+                                    <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
+                                        <div class="cursor-pointer" onclick="router.navigate('recipe', '${recipe.id}')">
+                                            <div class="flex items-center space-x-2 text-xs font-medium text-sage mb-1.5">
+                                                <span>${recipe.difficulty || 'Custom'}</span>
+                                                <span>•</span>
+                                                <span>${recipe.servings} servings</span>
+                                            </div>
+                                            <h3 class="text-lg font-serif font-bold text-charcoal hover:text-sage transition-colors">${recipe.title}</h3>
+                                            <p class="text-xs text-charcoal/70 line-clamp-2 mt-1">${recipe.description}</p>
+                                        </div>
+                                        <div class="pt-3 border-t border-warmSand flex items-center justify-between">
+                                            <button onclick="router.navigate('recipe', '${recipe.id}')" class="text-xs font-semibold text-sage hover:underline">Open Recipe</button>
+                                            <button onclick="deleteSavedRecipe('${recipe.id}')" class="text-xs text-terracotta hover:underline font-medium">Delete</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                </div>
+            `;
+        }
+
+        // --- View 5: Kitchen Profile View ---
+        function renderKitchenProfileView() {
+            const kp = appState.kitchenProfile;
+            const availableAppliances = [
+                'Oven', 'Stovetop', 'Air fryer', 'Microwave', 'Instant Pot / pressure cooker',
+                'Slow cooker', 'Blender', 'Food processor', 'Cast-iron skillet', 'Standard frying pan', 'Rice cooker', 'Grill'
+            ];
+            const skillLevels = [
+                { id: 'beginner', title: 'Beginner', desc: 'Needs clear, step-by-step guidance and simple explanations.' },
+                { id: 'intermediate', title: 'Intermediate', desc: 'Comfortable with standard cooking techniques and terminology.' },
+                { id: 'advanced', title: 'Advanced', desc: 'Experienced chef, interested in advanced culinary techniques.' }
+            ];
+
+            return `
+                <div class="max-w-4xl mx-auto px-4 lg:px-8 py-10 space-y-8 flex-1 w-full">
+                    <div>
+                        <h1 class="text-3xl font-serif font-bold text-charcoal">Kitchen Profile & Preferences</h1>
+                        <p class="text-sm text-charcoal/70">RecipeOS personalizes every recipe based on your equipment and cooking skill level.</p>
+                    </div>
+
+                    <!-- Cooking Experience -->
+                    <div class="bg-white rounded-2xl border border-warmSand p-6 shadow-sm space-y-4">
+                        <h3 class="font-serif font-bold text-lg text-charcoal flex items-center space-x-2">
+                            <i data-lucide="award" class="w-5 h-5 text-sage"></i>
+                            <span>Cooking Experience Level</span>
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            ${skillLevels.map(lvl => `
+                                <div onclick="updateSkillLevel('${lvl.id}')" class="p-4 rounded-xl border cursor-pointer transition-all ${kp.skillLevel === lvl.id ? 'border-sage bg-sageLight/50 shadow-sm' : 'border-warmSand bg-cream hover:border-sage/50'}">
+                                    <h4 class="font-semibold text-sm text-charcoal mb-1">${lvl.title}</h4>
+                                    <p class="text-xs text-charcoal/70 leading-relaxed">${lvl.desc}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Equipment Owned -->
+                    <div class="bg-white rounded-2xl border border-warmSand p-6 shadow-sm space-y-4">
+                        <h3 class="font-serif font-bold text-lg text-charcoal flex items-center space-x-2">
+                            <i data-lucide="wrench" class="w-5 h-5 text-sage"></i>
+                            <span>Kitchen Equipment & Appliances</span>
+                        </h3>
+                        <p class="text-xs text-charcoal/70">Select the tools and appliances you have in your kitchen. RecipeOS will alert you or suggest alternatives if a recipe requires missing gear.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
+                            ${availableAppliances.map(app => {
+                                const has = kp.appliances.includes(app);
+                                return `
+                                    <div onclick="toggleAppliance('${app}')" class="flex items-center space-x-3 p-3 rounded-xl border cursor-pointer transition-all ${has ? 'border-sage bg-sageLight text-sageDark font-semibold' : 'border-warmSand bg-cream text-charcoal hover:bg-warmSand'}">
+                                        <div class="w-4 h-4 rounded flex items-center justify-center border ${has ? 'bg-sage border-sage text-white' : 'border-charcoal/30 bg-white'}">
+                                            ${has ? '<i data-lucide="check" class="w-3 h-3"></i>' : ''}
+                                        </div>
+                                        <span class="text-xs">${app}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <button onclick="saveKitchenProfile()" class="px-6 py-3 bg-sage hover:bg-sageDark text-white font-semibold rounded-xl text-sm shadow-md transition-colors flex items-center space-x-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>
+                            <span>Save Profile</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- View 6: Cooking Mode (Immersive Step-by-Step) ---
+        function renderCookingModeView() {
+            const recipe = getActiveRecipe();
+            const steps = recipe.steps || [];
+            const idx = Math.min(appState.cookingModeStepIndex, steps.length - 1);
+            const currentStep = steps[idx] || { instruction: 'Enjoy your meal!', ingredientIds: [] };
+
+            // Find relevant ingredients for this step
+            const relevantIngredients = (recipe.ingredients || []).filter(ing => (currentStep.ingredientIds || []).includes(ing.id));
+
+            return `
+                <div class="fixed inset-0 z-50 bg-charcoal text-white flex flex-col justify-between overflow-y-auto">
+                    <!-- Top Bar -->
+                    <div class="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-charcoal/90 backdrop-blur-md">
+                        <div class="flex items-center space-x-3">
+                            <button onclick="router.navigate('recipe', '${recipe.id}')" class="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors flex items-center space-x-1.5 text-xs font-semibold">
+                                <i data-lucide="x" class="w-4 h-4"></i>
+                                <span>Exit Cooking Mode</span>
+                            </button>
+                            <span class="font-serif font-bold text-lg truncate max-w-xs sm:max-w-md">${recipe.title}</span>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-medium text-white/70">Step ${idx + 1} of ${steps.length}</span>
+                            <button onclick="toggleAIChat()" class="px-3.5 py-2 bg-sage hover:bg-sageDark text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-sm">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
+                                <span>Ask AI about Step</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Active Step Content Area -->
+                    <div class="max-w-4xl mx-auto px-6 py-12 flex-1 flex flex-col justify-center items-center text-center space-y-8">
+                        <div class="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-white/10 text-amber-300 text-xs font-bold uppercase tracking-wider">
+                            <span>Step ${idx + 1}</span>
+                        </div>
+                        <h2 class="text-3xl sm:text-5xl font-serif font-bold leading-tight max-w-3xl text-cream">
+                            "${currentStep.instruction}"
+                        </h2>
+
+                        <!-- Relevant Ingredients for this Step -->
+                        ${relevantIngredients.length > 0 ? `
+                            <div class="bg-white/5 border border-white/10 rounded-2xl p-4 max-w-md w-full space-y-2">
+                                <span class="text-xs uppercase tracking-wider text-white/50 font-semibold">Ingredients needed for this step:</span>
+                                <div class="flex flex-wrap justify-center gap-2">
+                                    ${relevantIngredients.map(ing => `
+                                        <span class="px-3 py-1 bg-white/10 rounded-xl text-xs text-amber-200 font-medium">
+                                            ${ing.quantity || ''} ${ing.unit || ''} ${ing.name}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <!-- Timer Widget -->
+                        ${currentStep.durationMinutes ? `
+                            <div class="bg-white/10 border border-white/20 rounded-2xl p-4 flex items-center space-x-4 max-w-sm w-full justify-between">
+                                <div class="flex items-center space-x-2">
+                                    <i data-lucide="timer" class="w-5 h-5 text-amber-300"></i>
+                                    <span class="text-sm font-semibold">Suggested Timer (${currentStep.durationMinutes}m)</span>
+                                </div>
+                                <button onclick="startStepTimer(${currentStep.durationMinutes})" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-charcoal font-bold text-xs rounded-xl transition-colors">Start Timer</button>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Bottom Navigation Controls -->
+                    <div class="px-6 py-6 border-t border-white/10 bg-charcoal/90 backdrop-blur-md flex items-center justify-between max-w-5xl mx-auto w-full">
+                        <button onclick="changeCookingStep(-1)" ${idx === 0 ? 'disabled' : ''} class="px-6 py-3 bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white font-semibold rounded-xl text-sm transition-colors flex items-center space-x-2">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            <span>Previous Step</span>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            ${steps.map((s, i) => `
+                                <div onclick="appState.cookingModeStepIndex = ${i}; renderCurrentView();" class="w-3 h-3 rounded-full cursor-pointer transition-all ${i === idx ? 'bg-amber-400 w-8' : 'bg-white/30 hover:bg-white/50'}"></div>
+                            `).join('')}
+                        </div>
+                        <button onclick="changeCookingStep(1)" ${idx === steps.length - 1 ? 'disabled' : ''} class="px-6 py-3 bg-sage hover:bg-sageDark disabled:opacity-35 disabled:hover:bg-sage text-white font-semibold rounded-xl text-sm transition-colors flex items-center space-x-2">
+                            <span>Next Step</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function changeCookingStep(delta) {
+            const recipe = getActiveRecipe();
+            const max = (recipe.steps || []).length - 1;
+            appState.cookingModeStepIndex = Math.max(0, Math.min(max, appState.cookingModeStepIndex + delta));
+            renderCurrentView();
+        }
+
+        function startStepTimer(minutes) {
+            let seconds = minutes * 60;
+            alert(`Timer started for ${minutes} minutes! (Simulated active countdown in Cooking Mode)`);
+        }
+
+        // --- Interactive Click Handlers & AI Workflows ---
+
+        function handleIngredientClick(ingredientId, ingredientName) {
+            appState.aiContext = { type: 'ingredient', id: ingredientId, name: ingredientName };
+            updateAIContextBanner();
+            toggleAIChat();
+            // Preload suggestion in chat
+            appendAIMessage(`You selected ingredient: **${ingredientName}**. What would you like to know or change?`, 'bot');
+        }
+
+        function handleStepClick(stepId, instructionText) {
+            appState.aiContext = { type: 'step', id: stepId, name: instructionText };
+            updateAIContextBanner();
+
+            // Toggle inline explanation
+            const container = document.getElementById(`step-expanded-${stepId}`);
+            if (!container) return;
+            if (container.classList.contains('hidden')) {
+                container.classList.remove('hidden');
+                container.innerHTML = `
+                    <div class="bg-warmSand/70 p-3.5 rounded-xl space-y-2.5">
+                        <div class="flex items-center justify-between font-semibold text-charcoal">
+                            <span class="flex items-center"><i data-lucide="sparkles" class="w-3.5 h-3.5 text-sage mr-1"></i> AI Step Explanation & Guidance</span>
+                            <div class="space-x-2">
+                                <button onclick="fetchStepExplanation('${stepId}', 'beginner')" class="text-[10px] bg-white px-2 py-1 rounded border border-warmSand hover:bg-sageLight">Beginner</button>
+                                <button onclick="fetchStepExplanation('${stepId}', 'detailed')" class="text-[10px] bg-white px-2 py-1 rounded border border-warmSand hover:bg-sageLight">Detailed</button>
+                                <button onclick="collapseStep('${stepId}')" class="text-[10px] text-terracotta hover:underline">Close</button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-charcoal/80 leading-relaxed">
+                            <strong>Quick Guide:</strong> For "${instructionText}", ensure your tools are prepped and follow standard culinary safety. Click 'Detailed' or ask AI in the sidebar for step-by-step technique breakdown or YouTube tutorial links.
+                        </p>
+                    </div>
+                `;
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
+        function collapseStep(stepId) {
+            const container = document.getElementById(`step-expanded-${stepId}`);
+            if (container) container.classList.add('hidden');
+        }
+
+        function handleEquipmentClick(equipmentId, equipmentName) {
+            appState.aiContext = { type: 'equipment', id: equipmentId, name: equipmentName };
+            updateAIContextBanner();
+            toggleAIChat();
+            appendAIMessage(`You clicked equipment: **${equipmentName}**. Do you need an alternative method or substitute?`, 'bot');
+        }
+
+        function updateAIContextBanner() {
+            const banner = document.getElementById('ai-context-banner');
+            const text = document.getElementById('ai-context-text');
+            if (!banner || !text) return;
+            if (appState.aiContext) {
+                banner.classList.remove('hidden');
+                text.innerText = `Selected Context: [${appState.aiContext.type.toUpperCase()}] ${appState.aiContext.name}`;
+            } else {
+                banner.classList.add('hidden');
+            }
+        }
+
+        function clearAIContext() {
+            appState.aiContext = null;
+            updateAIContextBanner();
+        }
+
+        function toggleAIChat() {
+            const drawer = document.getElementById('ai-chat-drawer');
+            if (!drawer) return;
+            drawer.classList.toggle('translate-x-full');
+        }
+
+        function sendQuickPrompt(promptText) {
+            const input = document.getElementById('ai-input');
+            if (input) input.value = promptText;
+            handleAIChatSubmit(new Event('submit'));
+        }
+
+        async function handleAIChatSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('ai-input');
+            if (!input) return;
+            const text = input.value.trim();
+            if (!text) return;
+
+            appendAIMessage(text, 'user');
+            input.value = '';
+
+            // Process AI Response or Substitution Proposal
+            const recipe = getActiveRecipe();
+            
+            // If user asks about substitution or changing ingredient
+            if (text.toLowerCase().includes('substitute') || text.toLowerCase().includes('instead of') || text.toLowerCase().includes('without') || text.toLowerCase().includes('can i use milk')) {
+                // Trigger intelligent proposal workflow
+                setTimeout(() => {
+                    generateIntelligentProposal(text, recipe);
+                }, 600);
+            } else {
+                // Standard contextual AI response
+                setTimeout(() => {
+                    let reply = `I've analyzed your question regarding "${recipe.title}". `;
+                    if (appState.aiContext) {
+                        reply += `In relation to your selected ${appState.aiContext.type} (${appState.aiContext.name}), `;
+                    }
+                    reply += `Here is expert culinary guidance: ${text.toLowerCase().includes('dairy') ? 'You can easily substitute heavy cream with full-fat coconut milk or cashew cream with a 1:1 ratio, though the sauce may be slightly lighter.' : 'For best results in this recipe, maintain consistent heat and follow the timing guidelines carefully. Let me know if you would like to propose an ingredient substitution or adjust cooking method!'}`;
+                    appendAIMessage(reply, 'bot');
+                }, 700);
+            }
+        }
+
+        function appendAIMessage(msg, sender) {
+            const area = document.getElementById('ai-messages');
+            if (!area) return;
+            const isUser = sender === 'user';
+            const div = document.createElement('div');
+            div.className = `flex items-start space-x-3 ${isUser ? 'flex-row-reverse space-x-reverse' : ''}`;
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full ${isUser ? 'bg-charcoal text-white' : 'bg-sage text-white'} flex items-center justify-center shrink-0">
+                    <i data-lucide="${isUser ? 'user' : 'bot'}" class="w-4 h-4"></i>
+                </div>
+                <div class="bg-white p-3.5 rounded-2xl ${isUser ? 'rounded-tr-none bg-sageLight text-charcoal' : 'rounded-tl-none shadow-sm border border-warmSand text-charcoal'} text-sm max-w-[80%]">
+                    <p class="leading-relaxed">${msg}</p>
+                </div>
+            `;
+            area.appendChild(div);
+            area.scrollTop = area.scrollHeight;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        // --- AI Intelligent Substitution Proposal Engine ---
+        function generateIntelligentProposal(userQuery, recipe) {
+            // Build mock proposed recipe modification
+            let modifiedRecipe = JSON.parse(JSON.stringify(recipe));
+            modifiedRecipe.id = recipe.id + '-mod-' + Date.now();
+            modifiedRecipe.title = recipe.title + ' (Adapted)';
+
+            let diffSummary = [];
+            let explanation = '';
+
+            if (userQuery.toLowerCase().includes('milk') || userQuery.toLowerCase().includes('heavy cream')) {
+                // Modify heavy cream to milk + thickening adjustment
+                const creamIng = modifiedRecipe.ingredients.find(i => i.name.toLowerCase().includes('heavy cream'));
+                if (creamIng) {
+                    creamIng.name = 'whole milk + 1 tbsp flour (thickening adjustment)';
+                    creamIng.quantity = '1 cup';
+                }
+                diffSummary.push({ type: 'ingredient', text: 'Heavy Cream → Whole Milk + 1 tbsp flour (thickening adjustment)' });
+                diffSummary.push({ type: 'step', text: 'Step 5: Adjusted simmering time to allow milk and flour slurry to thicken properly.' });
+                explanation = 'Substituting heavy cream with milk reduces fat content and requires a thickening agent (like flour or cornstarch) to achieve the same velvety sauce consistency. Simmer time increased by 2 minutes.';
+            } else {
+                diffSummary.push({ type: 'ingredient', text: 'Target ingredient adjusted per request' });
+                diffSummary.push({ type: 'step', text: 'Dependent cooking steps updated for chemical and textural balance.' });
+                explanation = 'AI has evaluated your requested modification and successfully recalculated ingredient ratios and dependent cooking steps to preserve culinary integrity and food safety.';
+            }
+
+            appState.activeProposal = modifiedRecipe;
+
+            // Show Proposal Modal
+            document.getElementById('proposal-explanation').innerText = explanation;
+            const diffList = document.getElementById('proposal-diff-list');
+            diffList.innerHTML = diffSummary.map(d => `
+                <div class="flex items-center space-x-2 text-xs text-charcoal font-medium py-1">
+                    <i data-lucide="arrow-right-circle" class="w-4 h-4 text-sage"></i>
+                    <span><strong>${d.type.toUpperCase()}:</strong> ${d.text}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('proposal-modal').classList.remove('hidden');
+            document.getElementById('proposal-modal').classList.add('flex');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+
+        function closeProposalModal() {
+            const modal = document.getElementById('proposal-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function applyProposedRecipe() {
+            if (!appState.activeProposal) return;
+            // Save modified recipe to saved recipes and set active
+            appState.savedRecipes.push(appState.activeProposal);
+            localStorage.setItem('recipeos_saved', JSON.stringify(appState.savedRecipes));
+            appState.activeRecipeId = appState.activeProposal.id;
+            closeProposalModal();
+            toggleAIChat();
+            router.navigate('recipe', appState.activeRecipeId);
+            alert('Recipe successfully modified and saved!');
+        }
+
+        // --- Recipe Saving & Management ---
+        function saveCurrentRecipe() {
+            const recipe = getActiveRecipe();
+            if (!appState.savedRecipes.some(r => r.id === recipe.id)) {
+                appState.savedRecipes.push(recipe);
+                localStorage.setItem('recipeos_saved', JSON.stringify(appState.savedRecipes));
+                alert('Recipe saved to My Recipes successfully!');
+            } else {
+                alert('Recipe is already saved in My Recipes.');
+            }
+        }
+
+        function deleteSavedRecipe(recipeId) {
+            appState.savedRecipes = appState.savedRecipes.filter(r => r.id !== recipeId);
+            localStorage.setItem('recipeos_saved', JSON.stringify(appState.savedRecipes));
+            renderCurrentView();
+        }
+
+        // --- Kitchen Profile Actions ---
+        function updateSkillLevel(level) {
+            appState.kitchenProfile.skillLevel = level;
+            renderCurrentView();
+        }
+
+        function toggleAppliance(app) {
+            const kp = appState.kitchenProfile;
+            if (kp.appliances.includes(app)) {
+                kp.appliances = kp.appliances.filter(a => a !== app);
+            } else {
+                kp.appliances.push(app);
+            }
+            renderCurrentView();
+        }
+
+        function saveKitchenProfile() {
+            localStorage.setItem('recipeos_profile', JSON.stringify(appState.kitchenProfile));
+            alert('Kitchen profile saved successfully!');
+            router.navigate('home');
+        }
+
+        // --- Recipe Import Workflow ---
+        function openImportModal() {
+            document.getElementById('import-modal').classList.remove('hidden');
+            document.getElementById('import-modal').classList.add('flex');
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.add('hidden');
+            document.getElementById('import-modal').classList.remove('flex');
+        }
+
+        function submitRecipeImport() {
+            const input = document.getElementById('import-url-input');
+            const url = input ? input.value.trim() : '';
+            if (!url) {
+                alert('Please enter a valid recipe URL.');
+                return;
+            }
+
+            // Simulate Schema.org JSON-LD extraction & AI normalization
+            const importedRecipe = {
+                id: 'imported-' + Date.now(),
+                title: 'Imported Gourmet Recipe',
+                description: 'Successfully extracted from external recipe URL using Schema.org parser and normalized by RecipeOS AI.',
+                sourceName: new URL(url).hostname || 'External Website',
+                sourceUrl: url,
+                imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
+                prepMinutes: 15,
+                cookMinutes: 25,
+                servings: 4,
+                difficulty: 'Intermediate',
+                cleanupDifficulty: 'Medium',
+                equipment: [
+                    { id: 'eq-1', name: 'Stovetop' },
+                    { id: 'eq-2', name: 'Skillet' },
+                    { id: 'eq-3', name: 'Cutting Board' }
+                ],
+                ingredients: [
+                    { id: 'ing-imp-1', name: 'main ingredient', quantity: 500, unit: 'g', notes: 'fresh' },
+                    { id: 'ing-imp-2', name: 'olive oil', quantity: 2, unit: 'tbsp', notes: '' },
+                    { id: 'ing-imp-3', name: 'garlic cloves', quantity: 3, unit: 'cloves', notes: 'minced' },
+                    { id: 'ing-imp-4', name: 'sea salt & pepper', quantity: 1, unit: 'tsp', notes: 'to taste' }
+                ],
+                steps: [
+                    { id: 'st-imp-1', instruction: 'Prepare and clean all ingredients on the cutting board.', ingredientIds: ['ing-imp-1'], equipmentIds: ['eq-3'], durationMinutes: 5 },
+                    { id: 'st-imp-2', instruction: 'Heat olive oil in a skillet over medium heat and sauté garlic until fragrant.', ingredientIds: ['ing-imp-2', 'ing-imp-3'], equipmentIds: ['eq-1', 'eq-2'], durationMinutes: 3 },
+                    { id: 'st-imp-3', instruction: 'Add main ingredient and cook until perfectly tender and golden brown. Season with salt and pepper.', ingredientIds: ['ing-imp-1', 'ing-imp-4'], equipmentIds: ['eq-2'], durationMinutes: 15 }
+                ]
+            };
+
+            appState.savedRecipes.push(importedRecipe);
+            localStorage.setItem('recipeos_saved', JSON.stringify(appState.savedRecipes));
+            appState.activeRecipeId = importedRecipe.id;
+            closeImportModal();
+            router.navigate('recipe', importedRecipe.id);
+            alert('Recipe successfully imported and parsed!');
+        }
+
+        // --- API Key Settings ---
+        function openSettingsModal() {
+            document.getElementById('settings-modal').classList.remove('hidden');
+            document.getElementById('settings-modal').classList.add('flex');
+            const keyInput = document.getElementById('api-key-input');
+            if (keyInput) keyInput.value = appState.apiKey;
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').classList.add('hidden');
+            document.getElementById('settings-modal').classList.remove('flex');
+        }
+
+        function saveApiKey() {
+            const keyInput = document.getElementById('api-key-input');
+            if (!keyInput) return;
+            const key = keyInput.value.trim();
+            appState.apiKey = key;
+            localStorage.setItem('recipeos_apikey', key);
+            if (key) {
+                document.getElementById('api-status-dot').className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500';
+                document.getElementById('api-status-dot').title = 'Gemini API Connected';
+            }
+            closeSettingsModal();
+            alert('API Key saved successfully!');
+        }
+
+        function clearApiKey() {
+            appState.apiKey = '';
+            localStorage.removeItem('recipeos_apikey');
+            document.getElementById('api-status-dot').className = 'absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500';
+            document.getElementById('api-status-dot').title = 'Demo mode / No API key';
+            closeSettingsModal();
+            alert('API Key removed.');
+        }
+
+        function handleHomeSearch(val) {
+            // Live home search hook if needed
+        }
+
+        // Run init on window load
+        window.onload = function() {
+            initApp();
+        };
+    </script>
+</body>
+</html>
