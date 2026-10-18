@@ -11,9 +11,16 @@ export type SearchSummaryProps = {
   constraints: string[];
   /** 24-hour "HH:MM", or "" when not set. */
   readyBy: string;
+  /** Where "Edit search" goes. Defaults to the mock landing page. */
+  editHref?: string;
 };
 
-export function SearchSummary({ query, constraints, readyBy }: SearchSummaryProps) {
+export function SearchSummary({
+  query,
+  constraints,
+  readyBy,
+  editHref = "/mocks/landing",
+}: SearchSummaryProps) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 flex-col gap-3">
@@ -37,7 +44,7 @@ export function SearchSummary({ query, constraints, readyBy }: SearchSummaryProp
       </div>
 
       <Link
-        href="/mocks/landing"
+        href={editHref}
         className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "shrink-0 self-start sm:self-auto")}
       >
         Edit search

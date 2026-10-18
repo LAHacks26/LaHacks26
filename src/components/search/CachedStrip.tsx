@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { ChefHat } from "lucide-react";
 import { SectionLabel } from "@/components/saffron";
-import type { CachedItem } from "@/lib/mocks/search";
 import { cn } from "@/lib/utils";
 
+export type CachedStripItem = {
+  id: string;
+  title: string;
+  site: string;
+  totalMin: number;
+  /** Recipe photo. The gradient placeholder shows when absent. */
+  imageUrl?: string;
+  /** Where the item goes. Defaults to the mock recipe page. */
+  href?: string;
+};
+
 export type CachedStripProps = {
-  items: CachedItem[];
+  items: CachedStripItem[];
   /** Slim rows with a small thumbnail, used above the live view. */
   compact?: boolean;
 };
@@ -32,27 +42,13 @@ export function CachedStrip({ items, compact = false }: CachedStripProps) {
             className={cn("shrink-0 snap-start", compact ? "w-60" : "w-44 sm:w-48")}
           >
             <Link
-              href="/mocks/recipe"
+              href={item.href ?? "/mocks/recipe"}
               className={cn(
                 "group flex overflow-hidden rounded-2xl border border-transparent bg-card shadow-border transition-[border-color,box-shadow] duration-150 ease-out outline-none hover:border-saffron hover:shadow-border-hover focus-visible:ring-3 focus-visible:ring-ring/50",
                 compact ? "items-center gap-2.5 p-2 pr-3" : "flex-col"
               )}
             >
-              {compact ? (
-                <span
-                  aria-hidden="true"
-                  className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-linear-to-br from-saffron-soft to-sage-soft"
-                >
-                  <ChefHat className="size-4 text-saffron-ink/70" />
-                </span>
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="flex h-20 items-center justify-center bg-linear-to-br from-saffron-soft via-card to-sage-soft"
-                >
-                  <ChefHat className="size-6 text-saffron-ink/70" />
-                </span>
-              )}
+              <Thumb imageUrl={item.imageUrl} compact={compact} />
               <span className={cn("flex min-w-0 flex-col", compact ? "gap-0" : "gap-0.5 p-3")}>
                 <span
                   className={cn(
@@ -71,5 +67,51 @@ export function CachedStrip({ items, compact = false }: CachedStripProps) {
         ))}
       </ul>
     </section>
+  );
+}
+
+function Thumb({ imageUrl, compact }: { imageUrl?: string; compact: boolean }) {
+  if (compact) {
+    if (imageUrl) {
+      // Recipe photos come from arbitrary sites, so next/image cannot list their hosts.
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={imageUrl}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          className="size-10 shrink-0 rounded-[9px] object-cover"
+        />
+      );
+    }
+    return (
+      <span
+        aria-hidden="true"
+        className="flex size-10 shrink-0 items-center justify-center rounded-[9px] bg-linear-to-br from-saffron-soft to-sage-soft"
+      >
+        <ChefHat className="size-4 text-saffron-ink/70" />
+      </span>
+    );
+  }
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        className="h-20 w-full bg-card object-cover"
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-20 items-center justify-center bg-linear-to-br from-saffron-soft via-card to-sage-soft"
+    >
+      <ChefHat className="size-6 text-saffron-ink/70" />
+    </span>
   );
 }
