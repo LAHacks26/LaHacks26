@@ -1,7 +1,29 @@
-# LA Hacks 2026 project
+# Saffron (LA Hacks 2026)
 
-Stack, run and test commands: TBD — fill in once the PRD is final (or rerun `/init`).
+A recipe browser: a Browser Use agent finds recipes, Gemini rewrites them into a clean layout, and every line can be clicked to ask about it, substitute it or adapt it. The spec is `docs/PRD.md`; it is the source of truth.
 Update this file after every mistake an agent makes so it doesn't repeat.
+
+## Stack
+- **Next.js** (App Router, TypeScript, `src/` directory). One app holds both frontend and API routes. Node runtime only, never edge.
+- **Tailwind CSS v4 + shadcn/ui**, lucide icons, `motion` for animation. **Light theme only** (cream). Design tokens live in `src/app/globals.css`. Fonts: Fraunces (display) and Inter (body).
+- **zod v4** for shared schemas. `src/lib/recipe/schema.ts` is the frozen contract between frontend and backend: do not change it inside a builder task; ask the orchestrator.
+- **Zustand** for client state.
+- **Postgres on Tiger Cloud** with pgvector. Drizzle ORM and the `postgres` driver live in `src/lib/db/`; migrations go in `drizzle/`.
+- **Gemini** via `@google/genai`. **Browser Use Cloud** and **ElevenLabs** are stubbed until their keys arrive (PRD §13.1).
+- **Auth.js v5** (Google), added in phase 5.
+- **Tests:** vitest. **Hosting:** Vultr VM with pm2 and Caddy. The build needs dev dependencies (Tailwind, shadcn CSS), so deploys run a full `npm ci`, never `--omit=dev`.
+- **Next.js 16.4 differs from most training data.** Read the relevant guide in `node_modules/next/dist/docs/` before using an unfamiliar Next API (see `AGENTS.md`). Cache Components is deliberately OFF in `next.config.ts`; do not turn it on.
+
+## Commands
+- `npm install`, then `npm run dev` (http://localhost:3000).
+- `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
+- `npm run db:generate` writes SQL migrations to `drizzle/`. `npm run db:migrate` applies them and needs `DATABASE_URL` in `.env.local`.
+- Before reporting a task done, run: `npm run typecheck && npm run lint && npm test && npm run build`.
+
+## Env
+Copy `.env.example` to `.env.local` and fill it in. Never commit any `.env*` file except `.env.example`. When you add an env var, add it to `.env.example` in the same change.
+
+**Database access:** the venue Wi-Fi blocks outbound Postgres ports (Tiger uses 31015), so DB connections from the laptop time out there. Ports 443 and 8080 work. Anything that touches the DB from the laptop (`npm run db:migrate`, DB-backed pages in `npm run dev`) needs a phone hotspot. If a DB call times out, ask the user to switch networks; don't debug the code or probe ports.
 
 ## Workflow
 1. **PRD** — Opus, high effort. Expand the idea with `/grill-me` (or `/jmo-workflow:interview`), review the app flow with `/lavish`, loop between the two. Save the PRD in `docs/PRD.md`.

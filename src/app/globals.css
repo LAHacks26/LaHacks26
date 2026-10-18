@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* Saffron is light theme only (cream). Keep one set of tokens in :root. */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-fraunces);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-saffron: var(--saffron);
+  --color-saffron-ink: var(--saffron-ink);
+  --color-saffron-soft: var(--saffron-soft);
+  --color-tomato: var(--tomato);
+  --color-tomato-soft: var(--tomato-soft);
+  --color-sage: var(--sage);
+  --color-sage-soft: var(--sage-soft);
+  --color-ink: var(--ink);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: light;
+
+  --background: #FAF6EF;
+  --foreground: #2B2118;
+  --card: #FFFDF9;
+  --card-foreground: #2B2118;
+  --popover: #FFFDF9;
+  --popover-foreground: #2B2118;
+  --primary: #E39B2D;
+  --primary-foreground: #2B1A05;
+  --secondary: #F3ECE0;
+  --secondary-foreground: #2B2118;
+  --muted: #F3ECE0;
+  --muted-foreground: #7A6A58;
+  --accent: #F3ECE0;
+  --accent-foreground: #2B2118;
+  --destructive: #C8472D;
+  --border: #E4D9C8;
+  --input: #E4D9C8;
+  --ring: #E39B2D;
+  --radius: 0.625rem;
+
+  /* Saffron extras, exposed to Tailwind via @theme inline (bg-saffron-soft, text-sage, ...) */
+  --saffron: #E39B2D;
+  --saffron-ink: #8A5A10;
+  --saffron-soft: #FBEBD0;
+  --tomato: #C8472D;
+  --tomato-soft: #F7E1DA;
+  --sage: #6F8F6A;
+  --sage-soft: #E3ECE0;
+  --ink: #2B2118;
+
+  --chart-1: #E39B2D;
+  --chart-2: #6F8F6A;
+  --chart-3: #C8472D;
+  --chart-4: #8A5A10;
+  --chart-5: #7A6A58;
+
+  --sidebar: #FFFDF9;
+  --sidebar-foreground: #2B2118;
+  --sidebar-primary: #E39B2D;
+  --sidebar-primary-foreground: #2B1A05;
+  --sidebar-accent: #F3ECE0;
+  --sidebar-accent-foreground: #2B2118;
+  --sidebar-border: #E4D9C8;
+  --sidebar-ring: #E39B2D;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
